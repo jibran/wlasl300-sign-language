@@ -1,0 +1,334 @@
+# =============================================================================
+# config.yaml — Master configuration for WLASL300 Sign Language Recognition
+# =============================================================================
+# All hyperparameters and settings live here.
+# Override individual values from the CLI in train.py using dot notation:
+#   uv run python train/train.py --training.batch_size 16
+#
+# Environment variables in .env take precedence over path values defined here.
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# Paths
+# -----------------------------------------------------------------------------
+paths:
+  # Root directory of the raw Kaggle download (overridable via WLASL_RAW_DIR)
+  raw_dir: dataset/raw
+
+  # Root directory of pre-extracted JPG frames — used by the Dataset class
+  # Layout: preprocessing/<split>/frames/<class_idx>/<video_id>/<class_idx>_<frame_idx>.jpg
+  preprocessing_dir: preprocessing
+
+  # Label mapping file: each line is "<class_idx> <label_str>"
+  folder2label_file: folder2label_str.txt
+
+  # Preprocessed video tensors saved as .pt files for faster loading
+  processed_dir: dataset/processed
+
+  # Offline I3D feature cache — (B, 1024) vectors extracted once and reused
+  features_dir: dataset/features
+
+  # Annotation outputs from build_annotations.py
+  annotations_dir: dataset/annotations
+  annotations_file: dataset/annotations/annotations.json   # Per-video metadata
+  vocab_file: dataset/annotations/vocab.json               # Ordered 300-class list
+  splits_file: dataset/annotations/splits.json             # Train/val/test assignments
+  embeddings_file: dataset/annotations/word2vec_embeddings.npy  # (300, 300) float32
+
+  # Original WLASL JSON from github.com/dxli94/WLASL (overridable via WLASL_JSON_PATH)
+  wlasl_json: dataset/raw/WLASL_v0.3.json
+
+  # Google News Word2Vec binary — place the file at this path before
+  # running build_annotations.py (overridable via WORD2VEC_BIN_PATH env var)
+  word2vec_bin: trained_models/embeddings/GoogleNews-vectors-negative300.bin
+
+  # Trained model checkpoints
+  trained_models_dir: trained_models
+  best_checkpoint_dir: trained_models/best     # Saved when val top-1 improves
+  latest_checkpoint_dir: trained_models/latest # Saved every epoch
+
+  # Logs, plots, and coverage reports
+  log_dir: logs
+  plots_dir: logs/plots
+
+
+# -----------------------------------------------------------------------------
+# Dataset
+# -----------------------------------------------------------------------------
+dataset:
+  # Total number of sign language classes in WLASL300
+  num_classes: 300
+
+  # Number of frames to uniformly sample from each video clip
+  # I3D expects a fixed temporal dimension — 64 is the standard
+  num_frames: 16
+
+  # Spatial resolution after resize and center crop (pixels)
+  frame_size: 256
+
+  # Resize the shorter side to this before cropping (standard I3D preprocessing)
+  resize_size: 256
+
+  # ImageNet channel mean and std used to normalise I3D input
+  # These match the Kinetics-400 pretraining statistics
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+  # Reproducible train/val/test stratified split
+  train_split: 0.70
+  val_split: 0.15
+  test_split: 0.15
+  split_seed: 42  # Fix this to get the same split every time
+
+  # Number of worker processes for DataLoader
+  # Set to 0 for debugging (single-process, easier to read tracebacks)
+  num_workers: 4
+
+  # Pin memory for faster GPU transfers (disable if running on CPU)
+  pin_memory: true
+
+  # If a clip has fewer frames than num_frames, loop it to reach num_frames.
+  # Pre-extracted clips always have exactly 16 frames so this rarely triggers.
+  # Kept true for robustness with raw .mp4 inference inputs.
+  loop_short_videos: true
+
+  # Maximum video duration to accept for raw .mp4 inference inputs (seconds).
+  # Not used when loading pre-extracted JPG frames.
+  max_duration_seconds: 10.0
+
+
+# -----------------------------------------------------------------------------
+# Augmentation — applied only during training, not val/test
+# -----------------------------------------------------------------------------
+augmentation:
+  # Randomly flip frames horizontally
+  # Most ASL signs are signer-invariant to mirroring — safe to enable
+  random_horizontal_flip: true
+  horizontal_flip_prob: 0.5
+
+  # Random spatial crop during training (vs deterministic centre crop at val/test)
+  random_crop: true
+  random_crop_size: 256   # Crop to this size after resizing to resize_size
+
+  # Colour jitter — perturbs brightness, contrast, saturation, hue independently
+  color_jitter: true
+  color_jitter_brightness: 0.3
+  color_jitter_contrast: 0.3
+  color_jitter_saturation: 0.2
+  color_jitter_hue: 0.05
+
+  # Temporal jitter — randomly shifts the frame sampling grid by ±jitter_frames
+  # Adds variety without changing the clip duration
+  temporal_jitter: true
+  temporal_jitter_frames: 4
+
+  # Speed perturbation — resamples the video at a random playback rate
+  # then re-samples back to num_frames; effective clip length changes
+  speed_perturbation: true
+  speed_min: 0.75   # Minimum playback rate (slow motion effect)
+  speed_max: 1.25   # Maximum playback rate (fast forward effect)
+
+  # Gaussian noise added to frame tensors after normalisation
+  random_noise: false
+  noise_std: 0.01
+
+
+# -----------------------------------------------------------------------------
+# Model
+# -----------------------------------------------------------------------------
+model:
+  # I3D backbone variant — matches pytorchvideo / torchvision naming
+  # Options: i3d_r50 (ResNet-50 inflated), slow_r50, slowfast_r50
+  backbone: i3d_r50
+
+  # Load backbone weights pretrained on Kinetics-400
+  # Set to false only for ablation experiments
+  pretrained: true
+
+  # Dimensionality of the I3D global average pool output
+  # backbone_output_dim is overridden at runtime by I3DBackbone._probe_output_dim().
+  # pytorchvideo i3d_r50 → 1024  |  torchvision r3d_18 fallback → 512
+  # This value is used only before the backbone is loaded (e.g. in tests).
+  backbone_output_dim: 1024
+
+  # Target embedding dimension — must equal Word2Vec vector size (300 for Google News)
+  embedding_dim: 300
+
+  # Hidden dimension of the projection head's intermediate linear layer
+  projection_hidden_dim: 512
+
+  # Dropout probability applied inside the projection head
+  # Higher = more regularisation; 0.4 is a good starting point for small datasets
+  dropout: 0.4
+
+  # Whether to apply L2 normalisation to the final embedding
+  # Required for cosine similarity loss to be well-behaved
+  l2_normalize: true
+
+
+# -----------------------------------------------------------------------------
+# Training
+# -----------------------------------------------------------------------------
+training:
+  # Total number of epochs across all phases
+  epochs: 60
+
+  # Number of video clips per GPU per step
+  # Reduce if you get CUDA OOM; use grad_accumulation_steps to compensate
+  batch_size: 8
+
+  # Accumulate gradients over N steps before calling optimizer.step()
+  # Effective batch size = batch_size × grad_accumulation_steps
+  grad_accumulation_steps: 2
+
+  # Use torch.cuda.amp for mixed-precision training
+  # Halves memory usage with minimal accuracy impact — always recommended
+  mixed_precision: true
+
+  # Global gradient norm clipping — prevents exploding gradients
+  # Set to null to disable
+  grad_clip_norm: 1.0
+
+  # Global random seed for reproducibility (affects PyTorch, NumPy, Python random)
+  seed: 42
+
+  # Loss function — cosine embedding loss: 1 - cosine_similarity(pred, target)
+  loss: cosine
+
+  # Triplet loss weight — added alongside cosine loss to push apart hard negatives
+  # Set to 0.0 to disable triplet loss entirely
+  triplet_loss_weight: 0.3
+
+  # Triplet loss margin (used if triplet_loss_weight > 0)
+  triplet_margin: 0.2
+
+  # --------------------------------------------------------------------------
+  # Phase 1 — warm-up: train projection head only, backbone frozen
+  # --------------------------------------------------------------------------
+  phase1:
+    epochs: 10              # Run for these many epochs before entering phase 2
+    learning_rate: 1.0e-3   # Higher LR is safe when backbone is frozen
+    freeze_backbone: true   # Freeze all I3D parameters
+
+  # --------------------------------------------------------------------------
+  # Phase 2 — fine-tune: unfreeze last N backbone blocks + projection head
+  # --------------------------------------------------------------------------
+  phase2:
+    epochs: 30              # Epochs 11–40
+    learning_rate: 1.0e-4   # Lower LR to avoid overwriting pretrained features
+    freeze_backbone: false
+    unfreeze_last_n_blocks: 2  # Number of I3D residual blocks to unfreeze from the end
+
+  # --------------------------------------------------------------------------
+  # Phase 3 — full fine-tune: all layers trainable
+  # --------------------------------------------------------------------------
+  phase3:
+    epochs: 20              # Epochs 41–60
+    learning_rate: 1.0e-5   # Very low LR — fine adjustment only
+    freeze_backbone: false
+    unfreeze_last_n_blocks: null  # null = unfreeze entire backbone
+
+
+# -----------------------------------------------------------------------------
+# Optimiser
+# -----------------------------------------------------------------------------
+optimiser:
+  # AdamW decouples weight decay from the gradient update — preferred over Adam
+  name: adamw
+  weight_decay: 1.0e-4    # L2 regularisation strength
+  betas: [0.9, 0.999]     # Exponential decay rates for gradient moments
+  eps: 1.0e-8             # Numerical stability term
+
+
+# -----------------------------------------------------------------------------
+# Learning rate scheduler
+# -----------------------------------------------------------------------------
+scheduler:
+  # Cosine annealing with warm restarts (SGDR)
+  # LR decays smoothly from its initial value to min_lr over T_0 epochs,
+  # then restarts — helps escape local minima
+  name: cosine_warm_restarts
+  T_0: 10          # Epochs per restart cycle
+  T_mult: 2        # Multiply cycle length by this after each restart
+  min_lr: 1.0e-6   # Minimum LR at the bottom of each cosine cycle
+
+  # Linear warm-up: ramp LR from 0 to the phase LR over this many steps
+  # Prevents large gradient updates at the very start of each phase
+  warmup_steps: 100
+
+
+# -----------------------------------------------------------------------------
+# Early stopping
+# -----------------------------------------------------------------------------
+early_stopping:
+  # Metric to monitor — stops training if it does not improve
+  monitor: val_top1_accuracy
+  # Number of epochs with no improvement before stopping
+  patience: 5
+  # Minimum change to qualify as an improvement
+  min_delta: 0.001
+  # Whether a higher or lower value is better
+  mode: max   # "max" for accuracy, "min" for loss
+
+
+# -----------------------------------------------------------------------------
+# Checkpointing
+# -----------------------------------------------------------------------------
+checkpointing:
+  # Save a checkpoint after every epoch to trained_models/latest/
+  save_every_epoch: true
+  # Save to trained_models/best/ when val_top1_accuracy improves
+  save_best: true
+  # Metric used to determine the best checkpoint
+  best_metric: val_top1_accuracy
+  # Keep only the N most recent epoch checkpoints in latest/
+  # Prevents disk from filling up; set to null to keep all
+  keep_last_n: 3
+
+
+# -----------------------------------------------------------------------------
+# Evaluation
+# -----------------------------------------------------------------------------
+evaluation:
+  # Top-k values to compute accuracy for
+  topk: [1, 5]
+  # Run full evaluation on the test set after training completes
+  run_test_eval: true
+  # Number of nearest neighbours to retrieve for qualitative analysis
+  retrieval_k: 10
+
+
+# -----------------------------------------------------------------------------
+# Experiment tracking
+# -----------------------------------------------------------------------------
+logging:
+  # Choose experiment tracker: "wandb", "mlflow", or "none"
+  logger: none
+
+  # Log metrics every N training steps (in addition to per-epoch logging)
+  log_every_n_steps: 10
+
+  # Log a sample of predicted vs ground-truth embeddings for visual inspection
+  log_embedding_samples: true
+  embedding_sample_size: 50   # Number of validation samples to visualise per epoch
+
+  # Log level for the Python logger (loguru): DEBUG, INFO, WARNING, ERROR
+  log_level: INFO
+
+
+# -----------------------------------------------------------------------------
+# Inference
+# -----------------------------------------------------------------------------
+inference:
+  # Default checkpoint to load when running inference/inference.py
+  default_checkpoint: trained_models/best/checkpoint.pt
+
+  # Number of top predictions to return per video
+  top_k: 5
+
+  # Device for inference: "cuda", "cpu", or "auto" (auto selects cuda if available)
+  device: auto
+
+  # Batch size for batch inference (inference/inference.py --video_dir)
+  batch_size: 16

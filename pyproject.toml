@@ -1,0 +1,184 @@
+[project]
+name = "wlasl300-sign-language"
+version = "0.1.0"
+description = "Sign language word recognition from video sequences using I3D and Word2Vec embeddings on the WLASL300 dataset."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Jibran Ijaz", email = "jibran.ijaz@gmail.com" }]
+
+dependencies = [
+    # Core deep learning
+    "torch>=2.2.0",
+    "torchvision>=0.17.0",
+    "torchaudio>=2.2.0",
+    # Video processing
+    # opencv-python-headless avoids pulling in GUI/display libs (Qt, GTK)
+    # that are absent in headless server and CI environments.
+    "opencv-python-headless>=4.9.0",
+    # NLP / embeddings
+    # gensim is intentionally excluded — it has no pre-built wheels for
+    # Python 3.11+ on all platforms and must be installed manually before
+    # running build_annotations.py:
+    #
+    #   pip install gensim==4.4.0
+    #
+    # Everything else (training, inference, evaluation) only reads the
+    # pre-built word2vec_embeddings.npy file and never imports gensim.
+    "numpy>=1.26.0",
+    # Experiment tracking
+    "wandb>=0.16.0",
+    "mlflow>=3.0.0",
+    # Config management
+    "pyyaml>=6.0.1",
+    "dacite>=1.8.1",
+    # Data utilities
+    # scikit-learn>=1.8.0 requires Python >=3.11 and has py3.14 wheels.
+    # scipy>=1.16.1 is the first scipy with py3.14 wheels (Jul 2025).
+    # Both floors are required — scikit-learn does not pin scipy tightly
+    # enough, so uv can backtrack to an older scipy without an explicit floor.
+    "scikit-learn>=1.8.0",
+    "scipy>=1.16.1",
+    "pandas>=2.2.0",
+    "tqdm>=4.66.0",
+    "pillow>=10.2.0",
+    # Visualization
+    "matplotlib>=3.8.0",
+    "seaborn>=0.13.0",
+    "plotly>=5.20.0",
+    # Utilities
+    "rich>=13.7.0",
+    "loguru>=0.7.2",
+    "einops>=0.7.0",
+    "gensim>=4.4.0",
+    "pytorchvideo>=0.1.5",
+]
+
+[project.optional-dependencies]
+# video: fast video decoding via decord (preferred) and PyAV (fallback).
+#
+# Both require native libraries not present on every machine:
+#   - decord: no wheels for Python 3.11+ on many platforms; needs
+#     libavcodec/libavformat at build time.
+#   - av (PyAV): needs FFmpeg development headers.
+#
+# Install after meeting system prerequisites:
+#   uv sync --extra video
+#
+# Linux (Debian/Ubuntu):
+#   sudo apt-get install -y ffmpeg libavcodec-dev libavformat-dev libavutil-dev
+# macOS (Homebrew):
+#   brew install ffmpeg
+# Google Colab: FFmpeg is pre-installed; the notebook pip-installs these directly.
+video = [
+    "decord>=0.6.0",
+    "av>=12.0.0",
+]
+dev = [
+    "ruff>=0.3.0",
+    "black>=24.2.0",
+    "mypy>=1.9.0",
+    "pre-commit>=3.6.0",
+]
+test = [
+    "pytest>=8.1.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+]
+notebook = [
+    "jupyter>=1.0.0",
+    "black[jupyter]>=24.2.0",
+    "ipywidgets>=8.1.0",
+    "ipykernel>=6.29.0",
+]
+
+[project.scripts]
+train = "train.train:main"
+infer = "inference.inference:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dataset", "models", "utils", "config", "train", "inference"]
+
+# ---------------------------------------------------------------------------
+# Ruff (linter + formatter)
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["dataset", "models", "utils", "config", "train", "inference", "tests"]
+# Notebooks execute cells sequentially — imports after setup code are normal.
+exclude = ["notebooks/*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "ANN", "B", "SIM"]
+ignore = [
+    "N806",    # variable in function should be lowercase
+               # (e.g. D = embedding_dim, common in ML code)
+    "N812",    # lowercase imported as non-lowercase
+               # (e.g. torchvision.transforms as T — ecosystem convention)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest fixtures have special signatures — type annotations add no value here.
+# ANN001 missing type annotation for function argument
+# ANN002 missing type annotation for *args
+# ANN003 missing type annotation for **kwargs
+# ANN201 missing return type annotation for public function
+# ANN202 missing return type annotation for private function
+"tests/*.py" = [
+    "ANN001",  # missing type annotation for function argument
+    "ANN002",  # missing type annotation for *args
+    "ANN003",  # missing type annotation for **kwargs
+    "ANN201",  # missing return type annotation for public function
+    "ANN202",  # missing return type annotation for private function
+    "ANN204",  # missing return type annotation for special method (__init__)
+    "N803",    # argument name should be lowercase
+               # (B, C, D, T, H, W are standard ML dimension names)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dataset", "models", "utils", "config", "train", "inference"]
+
+# ---------------------------------------------------------------------------
+# Black
+# ---------------------------------------------------------------------------
+[tool.black]
+line-length = 100
+target-version = ["py311", "py312", "py313"]
+
+# ---------------------------------------------------------------------------
+# Mypy
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_return_any = true
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v --cov=. --cov-report=term-missing --cov-report=html:logs/coverage"
+markers = [
+    "slow: marks tests as slow (deselect with -m 'not slow')",
+    "integration: marks tests requiring GPU or full dataset",
+]
+
+# ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["dataset", "models", "utils", "config", "train", "inference"]
+omit = ["tests/*", "notebooks/*", "*/__init__.py", "data/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

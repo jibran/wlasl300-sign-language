@@ -1,0 +1,97 @@
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+pip-wheel-metadata/
+
+# ---------------------------------------------------------------------------
+# uv
+# ---------------------------------------------------------------------------
+.venv/
+.uv/
+uv.lock          # commit this if you want reproducible installs across machines
+                 # uncomment the line above to ignore it instead
+
+# ---------------------------------------------------------------------------
+# PyTorch / ML artefacts
+# ---------------------------------------------------------------------------
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.pickle
+trained_models/best/*
+trained_models/latest/*
+# Keep the directory structure but not the weights
+!trained_models/best/.gitkeep
+!trained_models/latest/.gitkeep
+!trained_models/embeddings/.gitkeep
+
+# Ignore the W2V binary (too large for git — 1.5 GB)
+trained_models/embeddings/*.bin
+trained_models/embeddings/*.bin.gz
+
+# ---------------------------------------------------------------------------
+# Data — never commit raw video or large binaries
+# ---------------------------------------------------------------------------
+dataset/raw/
+dataset/processed/
+dataset/features/
+# Annotation outputs are generated — commit only the build script
+dataset/annotations/annotations.json
+dataset/annotations/splits.json
+dataset/annotations/word2vec_embeddings.npy
+dataset/annotations/oov_report.txt
+# vocab.json is small and useful to commit
+!dataset/annotations/vocab.json
+
+# ---------------------------------------------------------------------------
+# Logs & experiment tracking
+# ---------------------------------------------------------------------------
+logs/
+mlruns/
+wandb/
+*.log
+*.out
+
+# ---------------------------------------------------------------------------
+# Notebooks — strip outputs before committing
+# ---------------------------------------------------------------------------
+notebooks/.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ---------------------------------------------------------------------------
+# Coverage
+# ---------------------------------------------------------------------------
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---------------------------------------------------------------------------
+# IDEs
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------------------
+# Environment / secrets
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+secrets/
