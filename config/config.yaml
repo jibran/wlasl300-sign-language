@@ -13,15 +13,13 @@
 # Paths
 # -----------------------------------------------------------------------------
 paths:
-  # Root directory of the raw Kaggle download (overridable via WLASL_RAW_DIR)
-  raw_dir: dataset/raw
 
   # Root directory of pre-extracted JPG frames — used by the Dataset class
   # Layout: preprocessing/<split>/frames/<class_idx>/<video_id>/<class_idx>_<frame_idx>.jpg
-  preprocessing_dir: preprocessing
+  preprocessing_dir: dataset/raw/preprocessing
 
   # Label mapping file: each line is "<class_idx> <label_str>"
-  folder2label_file: folder2label_str.txt
+  folder2label_file: dataset/raw/folder2label_str.txt
 
   # Preprocessed video tensors saved as .pt files for faster loading
   processed_dir: dataset/processed

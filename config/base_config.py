@@ -32,10 +32,9 @@ class PathsConfig:
 
     All relative paths are resolved from the project root at load time.
     Any path can be overridden by the corresponding environment variable
-    defined in ``.env`` (e.g. ``WLASL_RAW_DIR`` overrides ``raw_dir``).
+    defined in ``.env``.
 
     Attributes:
-        raw_dir: Root directory of the raw Kaggle video download.
         processed_dir: Directory for preprocessed video tensors (.pt files).
         features_dir: Directory for offline I3D feature cache vectors.
         annotations_dir: Directory containing all annotation output files.
@@ -55,7 +54,6 @@ class PathsConfig:
         plots_dir: Directory for saved matplotlib / plotly figures.
     """
 
-    raw_dir: str = "dataset/raw"
     processed_dir: str = "dataset/processed"
     features_dir: str = "dataset/features"
     annotations_dir: str = "dataset/annotations"
@@ -63,8 +61,8 @@ class PathsConfig:
     vocab_file: str = "dataset/annotations/vocab.json"
     splits_file: str = "dataset/annotations/splits.json"
     embeddings_file: str = "dataset/annotations/word2vec_embeddings.npy"
-    preprocessing_dir: str = "preprocessing"
-    folder2label_file: str = "folder2label_str.txt"
+    preprocessing_dir: str = "dataset/raw/preprocessing"
+    folder2label_file: str = "dataset/raw/folder2label_str.txt"
     word2vec_bin: str = "trained_models/embeddings/GoogleNews-vectors-negative300.bin"
     trained_models_dir: str = "trained_models"
     best_checkpoint_dir: str = "trained_models/best"
@@ -75,7 +73,6 @@ class PathsConfig:
     def __post_init__(self) -> None:
         """Apply environment variable overrides after dataclass initialisation."""
         env_overrides = {
-            "raw_dir": "WLASL_RAW_DIR",
             "word2vec_bin": "WORD2VEC_BIN_PATH",
         }
         for attr, env_var in env_overrides.items():

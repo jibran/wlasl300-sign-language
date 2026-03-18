@@ -29,10 +29,8 @@ Outputs written to ``--out_dir`` (default ``dataset/annotations/``):
 Usage::
 
     python dataset/annotations/build_annotations.py \\
-        --raw_dir            data/raw \\
-        --preprocessing_dir  preprocessing \\
-        --wlasl_dir          WLASL300 \\
-        --folder2label       folder2label_str.txt \\
+        --preprocessing_dir  dataset/raw/preprocessing \\
+        --folder2label       dataset/raw/folder2label_str.txt \\
         --word2vec_bin       trained_models/embeddings/GoogleNews-vectors-negative300.bin \\
         --out_dir            dataset/annotations
 """
@@ -112,7 +110,6 @@ def load_folder2label(folder2label_path: Path) -> dict[int, str]:
 
 
 def discover_clips(
-    raw_dir: Path,
     preprocessing_dir: Path,
     wlasl_dir: Path,
     label_map: dict[int, str],
@@ -127,7 +124,6 @@ def discover_clips(
     Also records the corresponding raw ``.mp4`` path for inference.
 
     Args:
-        raw_dir: Root of the raw data .
         preprocessing_dir: Root of the pre-extracted frame tree.
         wlasl_dir: Root of the raw ``WLASL300/`` video directory.
         label_map: Dict from :func:`load_folder2label`.
@@ -143,7 +139,7 @@ def discover_clips(
     seen_ids: set[str] = set()
 
     for split in _SPLITS:
-        frames_root = raw_dir / preprocessing_dir / split / "frames"
+        frames_root = preprocessing_dir / split / "frames"
         if not frames_root.exists():
             log.warning("Split directory not found, skipping: %s", frames_root)
             continue
@@ -185,9 +181,9 @@ def discover_clips(
                 seen_ids.add(video_id)
 
                 # Resolve raw .mp4 path (may not exist for all clips)
-                mp4_path = raw_dir / wlasl_dir / str(class_idx) / f"{video_id}.mp4"
+                mp4_path = wlasl_dir / str(class_idx) / f"{video_id}.mp4"
                 if not mp4_path.exists():
-                    alt = raw_dir / wlasl_dir / str(class_idx) / f"{video_id.zfill(5)}.mp4"
+                    alt = wlasl_dir / str(class_idx) / f"{video_id.zfill(5)}.mp4"
                     if alt.exists():
                         mp4_path = alt
 
@@ -507,12 +503,6 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument(
-        "--raw_dir",
-        type=Path,
-        default=Path("dataset/raw"),
-        help="Path to the raw data",
-    )
-    p.add_argument(
         "--preprocessing_dir",
         type=Path,
         default=Path("preprocessing"),
@@ -569,7 +559,6 @@ def main() -> None:
     np.random.seed(args.seed)
 
     log.info("WLASL300 annotation pipeline starting")
-    log.info("  raw_dir          : %s", args.raw_dir)
     log.info("  preprocessing_dir : %s", args.preprocessing_dir)
     log.info("  wlasl_dir         : %s", args.wlasl_dir)
     log.info("  folder2label      : %s", args.folder2label)
@@ -577,9 +566,9 @@ def main() -> None:
     log.info("  out_dir           : %s", args.out_dir)
     log.info("  num_frames        : %d", args.num_frames)
 
-    label_map = load_folder2label(args.raw_dir / args.folder2label)
+    label_map = load_folder2label(args.folder2label)
     clips, incomplete = discover_clips(
-        args.raw_dir, args.preprocessing_dir, args.wlasl_dir, label_map, args.num_frames
+        args.preprocessing_dir, args.wlasl_dir, label_map, args.num_frames
     )
     if not clips:
         log.error("No complete clips found — check preprocessing_dir layout.")

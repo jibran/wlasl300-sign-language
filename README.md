@@ -108,21 +108,15 @@ uv run pre-commit install
 # Using the Kaggle CLI (credentials in .env)
 uv run kaggle datasets download vodinhnhattruong/dataset-wlasl300 \
     --unzip --path data/raw/
-
-# Also download the original WLASL JSON annotation file
-# from https://github.com/dxli94/WLASL and place it at:
-#   data/raw/WLASL_v0.3.json
 ```
 
 ### Build annotations
 
-This step parses `WLASL_v0.3.json`, verifies video files on disk, computes Word2Vec embeddings for all 300 words, and produces stratified train/val/test splits.
+This step verifies video files on disk, computes Word2Vec embeddings for all 300 words, and produces stratified train/val/test splits.
 
 ```bash
 uv run python dataset/annotations/build_annotations.py \
-    --raw_dir           dataset/raw \
     --preprocessing_dir  preprocessing \
-    --wlasl_dir          WLASL300 \
     --folder2label       folder2label_str.txt \
     --word2vec_bin       trained_models/embeddings/GoogleNews-vectors-negative300.bin \
     --out_dir            dataset/annotations
@@ -379,7 +373,7 @@ uv run python train/train.py --config config/config.yaml --logger mlflow
 **Word-level deep sign language recognition from video: A new large-scale dataset and methods comparison.**
 *Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV).*
 https://arxiv.org/abs/1910.11006
-— Introduces the WLASL dataset used in this project. The annotation file `WLASL_v0.3.json` is sourced from the accompanying GitHub release.
+— Introduces the WLASL dataset used in this project.
 
 **Video feature extraction — I3D backbone**
 
@@ -478,7 +472,7 @@ Kaggle mirror of the WLASL dataset used for download and video distribution.
 https://www.kaggle.com/datasets/vodinhnhattruong/dataset-wlasl300
 
 [15] **WLASL GitHub repository** — Li, D. et al.
-Source of `WLASL_v0.3.json`, the official annotation file containing per-video signer ID, bounding box, frame boundaries, and original split assignments.
+Source of model design choices.
 https://github.com/dxli94/WLASL
 
 **Machine learning utilities**
