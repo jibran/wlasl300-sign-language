@@ -58,7 +58,8 @@ class EpochMetrics:
         top5: Top-5 nearest-neighbour accuracy in ``[0, 1]``.
         mean_cosine_sim: Mean cosine similarity between predicted and target
             embeddings.
-        samples_per_sec: Training throughput in video clips per second.
+        num_samples: Total number of video clips processed this epoch.
+        throughput_clips_per_sec: Training throughput in video clips per second.
         per_class_top1: Optional dict mapping class label to top-1 accuracy.
             Populated only when ``compute_per_class=True`` is passed to
             :meth:`MetricTracker.compute`.
@@ -72,26 +73,26 @@ class EpochMetrics:
     top1: float = 0.0
     top5: float = 0.0
     mean_cosine_sim: float = 0.0
-    samples_per_sec: float = 0.0
+    num_samples: int = 0
+    throughput_clips_per_sec: float = 0.0
     per_class_top1: dict[str, float] = field(default_factory=dict)
 
-    def to_dict(self) -> dict[str, float]:
+    def to_dict(self) -> dict[str, float | int]:
         """Serialise to a flat dict suitable for logging to W&B or MLflow.
 
         Returns:
-            Dict with ``split/metric_name`` keys and float values.
+            Dict with metric name keys and float/int values.
         """
-        prefix = f"{self.split}/"
-        d = {
-            f"{prefix}loss": self.loss,
-            f"{prefix}cosine_loss": self.cosine_loss,
-            f"{prefix}triplet_loss": self.triplet_loss,
-            f"{prefix}top1": self.top1,
-            f"{prefix}top5": self.top5,
-            f"{prefix}mean_cosine_sim": self.mean_cosine_sim,
-            f"{prefix}samples_per_sec": self.samples_per_sec,
+        return {
+            "loss": self.loss,
+            "cosine_loss": self.cosine_loss,
+            "triplet_loss": self.triplet_loss,
+            "top1": self.top1,
+            "top5": self.top5,
+            "mean_cosine_sim": self.mean_cosine_sim,
+            "num_samples": self.num_samples,
+            "throughput_clips_per_sec": self.throughput_clips_per_sec,
         }
-        return d
 
     def __str__(self) -> str:
         """Return a concise one-line summary string.
@@ -105,7 +106,7 @@ class EpochMetrics:
             f"top1={self.top1:.3f}  "
             f"top5={self.top5:.3f}  "
             f"cosine_sim={self.mean_cosine_sim:.3f}  "
-            f"thr={self.samples_per_sec:.1f} vid/s"
+            f"thr={self.throughput_clips_per_sec:.1f} clips/s"
         )
 
 
@@ -297,30 +298,45 @@ def compute_topk_accuracy(
     class_embeddings: Tensor,
     true_label_indices: Tensor,
     topk: tuple[int, ...] = (1, 5),
-) -> dict[str, float]:
-    """Compute top-k nearest-neighbour accuracy for multiple k values.
+    k: int | None = None,
+) -> dict[str, float] | float:
+    """Compute top-k nearest-neighbour accuracy.
 
-    Stateless version for use in quick evaluations without a tracker.
+    Two calling conventions are supported:
+
+    - ``compute_topk_accuracy(pred, class_emb, labels, topk=(1, 5))``
+      returns a ``dict`` mapping ``"top1"`` / ``"top5"`` to float accuracy.
+    - ``compute_topk_accuracy(pred, class_emb, labels, k=1)``
+      returns a single ``float`` accuracy for that k value.
 
     Args:
         pred_embeddings: Predicted embeddings ``(B, D)``, L2-normalised.
         class_embeddings: Class embedding matrix ``(C, D)``, L2-normalised.
         true_label_indices: Ground-truth class indices ``(B,)``, int64.
-        topk: Tuple of k-values to compute.
+        topk: Tuple of k-values.  Used when ``k`` is not provided.
+        k: Single k-value.  When provided, overrides ``topk`` and a single
+            float is returned instead of a dict.
 
     Returns:
-        Dict mapping ``"top{k}"`` to float accuracy in ``[0, 1]``.
+        Float accuracy when ``k`` is given; dict of accuracies otherwise.
     """
     similarities = pred_embeddings @ class_embeddings.T  # (B, C)
     C = class_embeddings.shape[0]
-    results: dict[str, float] = {}
 
-    for k in topk:
+    if k is not None:
         k_eff = min(k, C)
         _, top_indices = similarities.topk(k=k_eff, dim=-1, largest=True)
         true_exp = true_label_indices.unsqueeze(1).expand_as(top_indices)
         correct = top_indices.eq(true_exp).any(dim=1).float()
-        results[f"top{k}"] = correct.mean().item()
+        return correct.mean().item()
+
+    results: dict[str, float] = {}
+    for ki in topk:
+        k_eff = min(ki, C)
+        _, top_indices = similarities.topk(k=k_eff, dim=-1, largest=True)
+        true_exp = true_label_indices.unsqueeze(1).expand_as(top_indices)
+        correct = top_indices.eq(true_exp).any(dim=1).float()
+        results[f"top{ki}"] = correct.mean().item()
 
     return results
 

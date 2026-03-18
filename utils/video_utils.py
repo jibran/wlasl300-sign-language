@@ -12,7 +12,7 @@ Example::
     info = probe_video("data/raw/book/00620.mp4")
     print(info)
     # VideoInfo(path=..., num_frames=29, fps=25.0, width=256, height=256,
-    #           duration_secs=1.16, is_valid=True, error=None)
+    #           duration=1.16, is_valid=True, error=None)
 
     report = audit_video_dir("data/raw/", num_workers=4)
 """
@@ -44,7 +44,7 @@ class VideoInfo:
         fps: Frames per second reported by the container.
         width: Frame width in pixels.
         height: Frame height in pixels.
-        duration_secs: Clip duration in seconds.
+        duration: Clip duration in seconds.
         is_valid: ``True`` if the file could be opened and decoded.
         error: Error message if ``is_valid`` is ``False``, else ``None``.
     """
@@ -54,7 +54,7 @@ class VideoInfo:
     fps: float = 0.0
     width: int = 0
     height: int = 0
-    duration_secs: float = 0.0
+    duration: float = 0.0
     is_valid: bool = True
     error: str | None = None
 
@@ -157,7 +157,7 @@ def _probe_with_decord(path: str) -> VideoInfo:
         fps=fps,
         width=width,
         height=height,
-        duration_secs=duration,
+        duration=duration,
         is_valid=True,
     )
 
@@ -194,7 +194,7 @@ def _probe_with_cv2(path: str) -> VideoInfo:
         fps=fps,
         width=width,
         height=height,
-        duration_secs=duration,
+        duration=duration,
         is_valid=True,
     )
 
@@ -270,16 +270,16 @@ def audit_video_dir(
             continue
 
         report.valid += 1
-        durations.append(info.duration_secs)
+        durations.append(info.duration)
         frame_counts.append(info.num_frames)
         report.per_class_counts[label] = report.per_class_counts.get(label, 0) + 1
 
-        if info.duration_secs < min_duration:
+        if info.duration < min_duration:
             report.too_short += 1
-            log.debug("Too short (%.2fs): %s", info.duration_secs, info.path)
-        elif info.duration_secs > max_duration:
+            log.debug("Too short (%.2fs): %s", info.duration, info.path)
+        elif info.duration > max_duration:
             report.too_long += 1
-            log.debug("Too long (%.2fs): %s", info.duration_secs, info.path)
+            log.debug("Too long (%.2fs): %s", info.duration, info.path)
 
     # Duration statistics
     if durations:
@@ -323,7 +323,7 @@ def audit_video_dir(
 
 
 def uniform_sample_indices(
-    total_frames: int,
+    total: int,
     num_frames: int,
     start: int = 0,
     end: int | None = None,
@@ -331,11 +331,11 @@ def uniform_sample_indices(
     """Compute uniformly-spaced frame indices within a segment.
 
     Args:
-        total_frames: Total number of frames in the video.
+        total: Total number of frames in the video.
         num_frames: Number of indices to return.
         start: First valid frame index (0-indexed, inclusive).
         end: Last valid frame index (0-indexed, inclusive).  Defaults to
-            ``total_frames - 1``.
+            ``total - 1``.
 
     Returns:
         Integer NumPy array of shape ``(num_frames,)`` with indices in
@@ -347,7 +347,7 @@ def uniform_sample_indices(
     if num_frames < 1:
         raise ValueError(f"num_frames must be ≥ 1, got {num_frames}")
     if end is None:
-        end = total_frames - 1
+        end = total - 1
     if start > end:
         raise ValueError(f"start ({start}) must be ≤ end ({end})")
 
@@ -355,7 +355,7 @@ def uniform_sample_indices(
 
 
 def loop_pad_indices(
-    total_frames: int,
+    total: int,
     num_frames: int,
     start: int = 0,
     end: int | None = None,
@@ -366,7 +366,7 @@ def loop_pad_indices(
     the available indices are tiled cyclically to fill the output.
 
     Args:
-        total_frames: Total number of frames in the video.
+        total: Total number of frames in the video.
         num_frames: Desired output length.
         start: First valid frame index (0-indexed, inclusive).
         end: Last valid frame index (0-indexed, inclusive).
@@ -376,9 +376,9 @@ def loop_pad_indices(
         ``[start, end]``, looped if necessary.
     """
     if end is None:
-        end = total_frames - 1
+        end = total - 1
     start = max(0, start)
-    end = min(end, total_frames - 1)
+    end = min(end, total - 1)
 
     base = np.arange(start, end + 1)
     segment_len = len(base)

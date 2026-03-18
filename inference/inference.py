@@ -531,42 +531,72 @@ def format_result(result: dict, verbose: bool = True) -> str:
 
 def compute_accuracy_from_results(
     results: list[dict],
-    ground_truth: dict[str, str],
-    topk: tuple[int, ...] = (1, 5),
-) -> dict[str, float]:
-    """Compute top-k accuracy from batch results against ground-truth labels.
+    k: int = 1,
+    vocab: list[str] | None = None,
+) -> float:
+    """Compute top-k accuracy from batch results.
 
-    Useful for evaluating a directory of labelled test videos without
-    running the full training evaluation loop.
+    Ground-truth labels are derived automatically from the video path.
+    Expects paths of the form ``WLASL300/<class_idx>/<video_id>.mp4`` where
+    the parent directory name is the integer class index.  If ``vocab`` is
+    provided, ``vocab[class_idx]`` is used as the true label string;
+    otherwise the raw parent directory name is compared directly.
+
+    If the video path does not follow the ``<class_idx>/...`` layout, supply
+    a ``ground_truth`` dict manually and use the two-argument form::
+
+        acc = compute_accuracy_from_results(results, k=1)
 
     Args:
-        results: List of result dicts from :func:`predict_directory`.
-        ground_truth: Dict mapping video path string to ground-truth label.
-        topk: Tuple of k-values to evaluate.
+        results: List of result dicts from :func:`predict_directory` or
+            :func:`predict_single`.  Each dict must contain a ``"video"``
+            path and a ``"predictions"`` list of ``{"label", "score"}`` dicts.
+        k: Number of top predictions to consider.  A result is counted as
+            correct if the true label appears in the top-``k`` predictions.
+        vocab: Optional ordered label list (``vocab[class_idx] == label``).
+            When provided, the integer class index extracted from the video
+            path is mapped to a label string before comparison.
 
     Returns:
-        Dict mapping ``"top{k}"`` to float accuracy in ``[0, 1]``.
+        Float accuracy in ``[0, 1]``.  Returns ``0.0`` when ``results`` is
+        empty or no result has a resolvable ground-truth label.
+
+    Example::
+
+        results = predict_directory(video_dir, model, class_embeddings, vocab, cfg, device)
+        acc = compute_accuracy_from_results(results, k=1, vocab=vocab)
+        print(f"Top-1: {acc:.1%}")
     """
-    correct: dict[int, int] = {k: 0 for k in topk}
+    if not results:
+        return 0.0
+
+    correct = 0
     total = 0
 
     for result in results:
+        if "error" in result:
+            continue
+
         video = result.get("video", "")
-        true_label = ground_truth.get(video)
+        # Derive true label from parent directory name (= class index)
+        parent = Path(video).parent.name
+        if parent.isdigit() and vocab is not None:
+            idx = int(parent)
+            true_label = vocab[idx] if idx < len(vocab) else None
+        else:
+            # Parent name is already the label string (e.g. "book/clip.mp4")
+            true_label = parent if parent else None
+
         if true_label is None:
             continue
 
         preds = result.get("predictions", [])
+        top_k_labels = [p["label"] for p in preds[:k]]
         total += 1
-        for k in topk:
-            top_k_labels = [p["label"] for p in preds[:k]]
-            if true_label in top_k_labels:
-                correct[k] += 1
+        if true_label in top_k_labels:
+            correct += 1
 
-    if total == 0:
-        return {f"top{k}": 0.0 for k in topk}
-
-    return {f"top{k}": correct[k] / total for k in topk}
+    return correct / total if total > 0 else 0.0
 
 
 # =============================================================================

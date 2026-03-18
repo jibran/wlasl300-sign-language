@@ -379,7 +379,8 @@ def train_one_epoch(
         top1=results.get("top1", 0.0),
         top5=results.get("top5", 0.0),
         mean_cosine_sim=results.get("mean_cosine_sim", 0.0),
-        samples_per_sec=throughput(n_samples, elapsed),
+        num_samples=n_samples,
+        throughput_clips_per_sec=throughput(n_samples, elapsed),
     )
     return metrics, global_step
 
@@ -459,7 +460,8 @@ def evaluate(
         top1=results.get("top1", 0.0),
         top5=results.get("top5", 0.0),
         mean_cosine_sim=results.get("mean_cosine_sim", 0.0),
-        samples_per_sec=throughput(n_samples, elapsed),
+        num_samples=n_samples,
+        throughput_clips_per_sec=throughput(n_samples, elapsed),
         per_class_top1=per_class,
     )
     return metrics
@@ -819,7 +821,7 @@ def train(cfg: Config, resume_path: str | None = None) -> None:
         val_losses.append(val_metrics.loss)
         top1_history.append(val_metrics.top1)
         top5_history.append(val_metrics.top5)
-        throughput_history.append(train_metrics.samples_per_sec)
+        throughput_history.append(train_metrics.throughput_clips_per_sec)
 
         # ------------------------------------------------------------------ #
         # Checkpointing

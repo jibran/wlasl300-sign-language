@@ -114,7 +114,7 @@ def plot_loss_curves(
             Useful for logging to W&B via ``wandb.Image(fig)``.
 
     Returns:
-        The matplotlib figure if ``return_fig=True``, else ``None``.
+        :class:`~pathlib.Path` to the saved PNG, or the figure if ``return_fig=True``.
     """
 
     fig, ax = _get_axes()
@@ -137,10 +137,10 @@ def plot_loss_curves(
     ax.set_title("Training and validation loss")
     ax.legend()
 
-    _save(fig, save_dir, filename)
+    out = _save(fig, save_dir, filename)
     if return_fig:
         return fig
-    return None
+    return out
 
 
 # =============================================================================
@@ -165,7 +165,7 @@ def plot_accuracy_curves(
         return_fig: Return the figure object instead of closing it.
 
     Returns:
-        The matplotlib figure if ``return_fig=True``, else ``None``.
+        :class:`~pathlib.Path` to the saved PNG, or the figure if ``return_fig=True``.
     """
     fig, ax = _get_axes()
     if top1_history:
@@ -195,10 +195,10 @@ def plot_accuracy_curves(
     ax.set_title("Validation accuracy (nearest-neighbour retrieval)")
     ax.legend()
 
-    _save(fig, save_dir, filename)
+    out = _save(fig, save_dir, filename)
     if return_fig:
         return fig
-    return None
+    return out
 
 
 # =============================================================================
@@ -224,8 +224,17 @@ def plot_throughput(
         return_fig: Return the figure object instead of closing it.
 
     Returns:
-        The matplotlib figure if ``return_fig=True``, else ``None``.
+        :class:`~pathlib.Path` to the saved PNG, or the figure if ``return_fig=True``.
     """
+    if not throughput_history:
+
+        fig, ax = _get_axes()
+        ax.set_title("Training throughput per epoch")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Throughput (clips / second)")
+        out = _save(fig, save_dir, filename)
+        return fig if return_fig else out
+
     fig, ax = _get_axes()
     epochs = range(1, len(throughput_history) + 1)
 
@@ -252,10 +261,10 @@ def plot_throughput(
     )
     ax.legend()
 
-    _save(fig, save_dir, filename)
+    out = _save(fig, save_dir, filename)
     if return_fig:
         return fig
-    return None
+    return out
 
 
 # =============================================================================
@@ -264,7 +273,8 @@ def plot_throughput(
 
 
 def plot_per_class_accuracy(
-    per_class_acc: dict[str, float],
+    per_class_accuracy: dict[int | str, float],
+    vocab: list[str] | None = None,
     save_dir: str | Path = "logs/plots",
     filename: str = "per_class_accuracy.png",
     top_n: int = 30,
@@ -278,7 +288,10 @@ def plot_per_class_accuracy(
     hard sign classes.
 
     Args:
-        per_class_acc: Dict mapping class label string to top-1 accuracy.
+        per_class_accuracy: Dict mapping class index (int) or label string
+            to top-1 accuracy float.
+        vocab: Optional ordered label list.  When ``per_class_accuracy`` uses
+            integer keys, ``vocab[key]`` is used as the display label.
         save_dir: Directory to save the figure.
         filename: Output file name.
         top_n: Number of best classes to show.
@@ -286,11 +299,18 @@ def plot_per_class_accuracy(
         return_fig: Return the figure object instead of closing it.
 
     Returns:
-        The matplotlib figure if ``return_fig=True``, else ``None``.
+        :class:`~pathlib.Path` to the saved PNG, or the figure if
+        ``return_fig=True``.
     """
     import matplotlib.pyplot as plt
 
-    sorted_acc = sorted(per_class_acc.items(), key=lambda x: x[1])
+    # Normalise keys to label strings
+    str_acc: dict[str, float] = {}
+    for k, v in per_class_accuracy.items():
+        label = (vocab[k] if vocab and k < len(vocab) else str(k)) if isinstance(k, int) else str(k)
+        str_acc[label] = v
+
+    sorted_acc = sorted(str_acc.items(), key=lambda x: x[1])
     worst = sorted_acc[:bottom_n]
     best = sorted_acc[-top_n:]
 
@@ -325,10 +345,10 @@ def plot_per_class_accuracy(
     fig.suptitle("Per-class top-1 accuracy", fontsize=13, y=1.01)
     fig.tight_layout()
 
-    _save(fig, save_dir, filename)
+    out = _save(fig, save_dir, filename)
     if return_fig:
         return fig
-    return None
+    return out
 
 
 # =============================================================================
@@ -365,7 +385,7 @@ def plot_embedding_scatter(
         return_fig: Return the figure object instead of closing it.
 
     Returns:
-        The matplotlib figure if ``return_fig=True``, else ``None``.
+        :class:`~pathlib.Path` to the saved PNG, or the figure if ``return_fig=True``.
     """
     import matplotlib.pyplot as plt
     from sklearn.manifold import TSNE  # type: ignore[import]
@@ -408,10 +428,10 @@ def plot_embedding_scatter(
             markerscale=1.5,
         )
 
-    _save(fig, save_dir, filename)
+    out = _save(fig, save_dir, filename)
     if return_fig:
         return fig
-    return None
+    return out
 
 
 # =============================================================================
@@ -439,7 +459,7 @@ def plot_cosine_similarity_distribution(
         return_fig: Return the figure object instead of closing it.
 
     Returns:
-        The matplotlib figure if ``return_fig=True``, else ``None``.
+        :class:`~pathlib.Path` to the saved PNG, or the figure if ``return_fig=True``.
     """
 
     cos_sims = (pred_embeddings * target_embeddings).sum(axis=1)
@@ -458,10 +478,10 @@ def plot_cosine_similarity_distribution(
     ax.set_xlim(-1, 1)
     ax.legend()
 
-    _save(fig, save_dir, filename)
+    out = _save(fig, save_dir, filename)
     if return_fig:
         return fig
-    return None
+    return out
 
 
 # =============================================================================

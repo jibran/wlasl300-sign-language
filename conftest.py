@@ -22,10 +22,14 @@ Example::
 from __future__ import annotations
 
 import json
+import pathlib
 
 import numpy as np
 import pytest
 import torch
+
+from config.base_config import Config
+from models.projection_head import ProjectionHead
 
 # =============================================================================
 # Config fixture
@@ -33,7 +37,7 @@ import torch
 
 
 @pytest.fixture(scope="session")
-def cfg():
+def cfg() -> Config:
     """Return a fully populated Config loaded from config/config.yaml.
 
     Scoped to the test session so the YAML is only parsed once.
@@ -52,7 +56,7 @@ def cfg():
 
 
 @pytest.fixture(scope="session")
-def device():
+def device() -> torch.device:
     """Return the best available torch device for tests.
 
     Prefers CUDA if available, otherwise CPU.  GPU-dependent tests should
@@ -70,7 +74,7 @@ def device():
 
 
 @pytest.fixture(scope="session")
-def minimal_cfg():
+def minimal_cfg() -> Config:
     """Return a Config built from defaults — no YAML file required.
 
     Useful for unit tests that need a config but should not depend on the
@@ -90,7 +94,7 @@ def minimal_cfg():
 
 
 @pytest.fixture
-def dummy_video(cfg):
+def dummy_video(cfg: Config) -> torch.Tensor:
     """Return a random ``(1, 3, T, H, W)`` float32 video tensor.
 
     Simulates one preprocessed video clip on CPU, ready for the model
@@ -109,7 +113,7 @@ def dummy_video(cfg):
 
 
 @pytest.fixture
-def dummy_video_batch(cfg):
+def dummy_video_batch(cfg: Config) -> torch.Tensor:
     """Return a random ``(4, 3, T, H, W)`` float32 video batch.
 
     Args:
@@ -128,7 +132,7 @@ def dummy_video_batch(cfg):
 
 
 @pytest.fixture(scope="session")
-def dummy_vocab():
+def dummy_vocab() -> list[str]:
     """Return a small vocabulary list of 10 class names for fast testing.
 
     Returns:
@@ -149,7 +153,7 @@ def dummy_vocab():
 
 
 @pytest.fixture(scope="session")
-def dummy_embeddings(dummy_vocab):
+def dummy_embeddings(dummy_vocab: list[str]) -> torch.Tensor:
     """Return a random L2-normalised embedding matrix for the dummy vocab.
 
     Shape: ``(len(dummy_vocab), 300)``, float32, unit vectors.
@@ -172,7 +176,9 @@ def dummy_embeddings(dummy_vocab):
 
 
 @pytest.fixture
-def tmp_annotation_dir(dummy_vocab, dummy_embeddings, tmp_path):
+def tmp_annotation_dir(
+    dummy_vocab: list[str], dummy_embeddings: torch.Tensor, tmp_path: pathlib.Path
+) -> pathlib.Path:
     """Create a temporary annotations directory with all required files.
 
     Writes minimal ``annotations.json``, ``vocab.json``, ``splits.json``,
@@ -239,7 +245,7 @@ def tmp_annotation_dir(dummy_vocab, dummy_embeddings, tmp_path):
 
 
 @pytest.fixture
-def projection_head(cfg):
+def projection_head(cfg: Config) -> ProjectionHead:
     """Return a freshly initialised ProjectionHead on CPU.
 
     Args:
