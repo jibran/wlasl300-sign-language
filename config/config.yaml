@@ -36,8 +36,6 @@ paths:
   splits_file: dataset/annotations/splits.json             # Train/val/test assignments
   embeddings_file: dataset/annotations/word2vec_embeddings.npy  # (300, 300) float32
 
-  # Original WLASL JSON from github.com/dxli94/WLASL (overridable via WLASL_JSON_PATH)
-  wlasl_json: dataset/raw/WLASL_v0.3.json
 
   # Google News Word2Vec binary — place the file at this path before
   # running build_annotations.py (overridable via WORD2VEC_BIN_PATH env var)
@@ -147,9 +145,10 @@ model:
   pretrained: true
 
   # Dimensionality of the I3D global average pool output
-  # backbone_output_dim is overridden at runtime by I3DBackbone._probe_output_dim().
+  # backbone_output_dim is overridden at runtime by I3DBackbone._probe_output_dim()
+  # and backbone.output_dim is always used to build the ProjectionHead.
   # pytorchvideo i3d_r50 → 1024  |  torchvision r3d_18 fallback → 512
-  # This value is used only before the backbone is loaded (e.g. in tests).
+  # This config value is only used as the initial hint passed to I3DBackbone.
   backbone_output_dim: 1024
 
   # Target embedding dimension — must equal Word2Vec vector size (300 for Google News)

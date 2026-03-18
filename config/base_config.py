@@ -47,7 +47,6 @@ class PathsConfig:
             Layout: ``preprocessing/<split>/frames/<class_idx>/<video_id>/``.
         folder2label_file: Path to ``folder2label_str.txt`` mapping
             ``<class_idx> <label_str>`` — one line per class.
-        wlasl_json: Original WLASL_v0.3.json from the WLASL GitHub release.
         word2vec_bin: Google News Word2Vec binary file path.
         trained_models_dir: Root directory for all checkpoints.
         best_checkpoint_dir: Saved when validation top-1 accuracy improves.
@@ -66,7 +65,6 @@ class PathsConfig:
     embeddings_file: str = "dataset/annotations/word2vec_embeddings.npy"
     preprocessing_dir: str = "preprocessing"
     folder2label_file: str = "folder2label_str.txt"
-    wlasl_json: str = "dataset/raw/WLASL_v0.3.json"
     word2vec_bin: str = "trained_models/embeddings/GoogleNews-vectors-negative300.bin"
     trained_models_dir: str = "trained_models"
     best_checkpoint_dir: str = "trained_models/best"
@@ -78,7 +76,6 @@ class PathsConfig:
         """Apply environment variable overrides after dataclass initialisation."""
         env_overrides = {
             "raw_dir": "WLASL_RAW_DIR",
-            "wlasl_json": "WLASL_JSON_PATH",
             "word2vec_bin": "WORD2VEC_BIN_PATH",
         }
         for attr, env_var in env_overrides.items():
