@@ -52,6 +52,7 @@ dependencies = [
     "einops>=0.7.0",
     "gensim>=4.4.0",
     "pytorchvideo>=0.1.5",
+    "opencv-python>=4.11.0.86",
 ]
 
 [project.optional-dependencies]
@@ -95,6 +96,7 @@ notebook = [
 [project.scripts]
 train = "train.train:main"
 infer = "inference.inference:main"
+live  = "inference.live_inference:main"
 
 [build-system]
 requires = ["hatchling"]

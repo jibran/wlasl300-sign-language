@@ -297,6 +297,37 @@ uv run pytest --cov
 
 ---
 
+## Live inference
+
+Run real-time sign language recognition from your webcam:
+
+```bash
+uv run python inference/live_inference.py \
+    --checkpoint trained_models/best/checkpoint.pt
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--checkpoint` | `trained_models/best/checkpoint.pt` | Trained model checkpoint |
+| `--camera` | `0` | OpenCV camera index |
+| `--top_k` | `5` | Predictions shown on screen |
+| `--stride` | `8` | Run inference every N new frames |
+| `--device` | `auto` | `cuda`, `cpu`, or `auto` |
+| `--width` / `--height` | `640` / `480` | Webcam capture resolution |
+
+**Controls** (while the window is focused):
+
+- `q` — quit
+- `r` — reset the frame buffer (use between signs)
+- `s` — save the current buffer as `live_capture_<timestamp>.npy`
+
+The capture loop fills a 16-frame sliding window buffer.  Every `--stride`
+new frames the buffer is passed through the model and the top-k predictions
+are refreshed on screen.  A lower stride gives more frequent updates at the
+cost of higher CPU/GPU load.
+
+---
+
 ## Experiment tracking
 
 ### Weights & Biases
