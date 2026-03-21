@@ -991,6 +991,30 @@ def parse_args() -> argparse.Namespace:
         choices=["wandb", "mlflow", "none"],
         help="Override the experiment tracker set in config.yaml.",
     )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=None,
+        help="Override total training epochs (all phases combined).",
+    )
+    parser.add_argument(
+        "--phase1_epochs",
+        type=int,
+        default=None,
+        help="Override phase 1 epoch count (backbone frozen).",
+    )
+    parser.add_argument(
+        "--phase2_epochs",
+        type=int,
+        default=None,
+        help="Override phase 2 epoch count (last N blocks unfrozen).",
+    )
+    parser.add_argument(
+        "--phase3_epochs",
+        type=int,
+        default=None,
+        help="Override phase 3 epoch count (full unfreeze).",
+    )
     return parser.parse_args()
 
 
@@ -1012,12 +1036,40 @@ def main() -> None:
 
     cfg = Config.from_yaml(args.config)
 
+    import dataclasses
+
     # Apply CLI logger override
     if args.logger and args.logger != "none":
-        import dataclasses
-
         new_logging = dataclasses.replace(cfg.logging, logger=args.logger)
         cfg = dataclasses.replace(cfg, logging=new_logging)
+
+    # Apply phase epoch overrides
+    if any(x is not None for x in (args.phase1_epochs, args.phase2_epochs, args.phase3_epochs)):
+        p1 = dataclasses.replace(
+            cfg.training.phase1,
+            epochs=(
+                args.phase1_epochs if args.phase1_epochs is not None else cfg.training.phase1.epochs
+            ),
+        )
+        p2 = dataclasses.replace(
+            cfg.training.phase2,
+            epochs=(
+                args.phase2_epochs if args.phase2_epochs is not None else cfg.training.phase2.epochs
+            ),
+        )
+        p3 = dataclasses.replace(
+            cfg.training.phase3,
+            epochs=(
+                args.phase3_epochs if args.phase3_epochs is not None else cfg.training.phase3.epochs
+            ),
+        )
+        new_training = dataclasses.replace(cfg.training, phase1=p1, phase2=p2, phase3=p3)
+        cfg = dataclasses.replace(cfg, training=new_training)
+
+    # Apply total epoch override (must come after phase overrides)
+    if args.epochs is not None:
+        new_training = dataclasses.replace(cfg.training, epochs=args.epochs)
+        cfg = dataclasses.replace(cfg, training=new_training)
 
     train(cfg, resume_path=args.resume)
 

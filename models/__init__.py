@@ -12,9 +12,17 @@ Exposes the three core model classes::
 from models.i3d_backbone import I3DBackbone
 from models.projection_head import ProjectionHead
 from models.sign_model import SignModel
+from models.sign_model_linear import SignModelLinear
+from models.sign_model_classifier import SignModelClassifier
+from models.classifier_head import ClassifierHead
+from models.linear_head import LinearHead
 
 __all__ = [
     "SignModel",
+    "SignModelLinear",
+    "SignModelClassifier",
     "I3DBackbone",
     "ProjectionHead",
+    "ClassifierHead",
+    "LinearHead",
 ]

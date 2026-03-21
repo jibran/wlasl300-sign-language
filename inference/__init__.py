@@ -22,6 +22,7 @@ from inference.inference import (
     predict_single,
     preprocess_video,
 )
+from inference.inference_classifier import inference_classifier
 
 __all__ = [
     "predict_single",
@@ -30,4 +31,5 @@ __all__ = [
     "preprocess_video",
     "compute_accuracy_from_results",
     "format_result",
+    "inference_classifier",
 ]
