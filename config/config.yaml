@@ -13,7 +13,6 @@
 # Paths
 # -----------------------------------------------------------------------------
 paths:
-
   # Root directory of pre-extracted JPG frames — used by the Dataset class
   # Layout: preprocessing/<split>/frames/<class_idx>/<video_id>/<class_idx>_<frame_idx>.jpg
   preprocessing_dir: dataset/raw/preprocessing
@@ -147,7 +146,7 @@ model:
   # and backbone.output_dim is always used to build the ProjectionHead.
   # pytorchvideo i3d_r50 → 1024  |  torchvision r3d_18 fallback → 512
   # This config value is only used as the initial hint passed to I3DBackbone.
-  backbone_output_dim: 1024
+  backbone_output_dim: 2048
 
   # Target embedding dimension — must equal Word2Vec vector size (300 for Google News)
   embedding_dim: 300
@@ -259,6 +258,8 @@ scheduler:
 # Early stopping
 # -----------------------------------------------------------------------------
 early_stopping:
+  # Set to false to disable early stopping and always train for the full epoch count
+  enabled: true
   # Metric to monitor — stops training if it does not improve
   monitor: val_top1_accuracy
   # Number of epochs with no improvement before stopping

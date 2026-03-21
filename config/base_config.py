@@ -215,7 +215,7 @@ class ModelConfig:
 
     backbone: str = "i3d_r50"
     pretrained: bool = True
-    backbone_output_dim: int = 1024
+    backbone_output_dim: int = 512
     embedding_dim: int = 300
     projection_hidden_dim: int = 512
     dropout: float = 0.4
@@ -326,12 +326,16 @@ class EarlyStoppingConfig:
     """Early stopping criteria.
 
     Attributes:
+        enabled: Whether early stopping is active.  Set to ``False`` to
+            disable it entirely and always train for the full epoch count.
         monitor: Name of the metric to watch (e.g. ``"val_top1_accuracy"``).
         patience: Epochs without improvement before training is halted.
+            Only checked when ``enabled`` is ``True``.
         min_delta: Minimum absolute change to count as an improvement.
         mode: ``"max"`` if higher is better, ``"min"`` if lower is better.
     """
 
+    enabled: bool = True
     monitor: str = "val_top1_accuracy"
     patience: int = 5
     min_delta: float = 0.001
