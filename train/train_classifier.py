@@ -48,12 +48,13 @@ from torch.utils.data import DataLoader
 from config.base_config import Config
 from dataset.data.wlasl_dataset import build_dataloaders
 from models.sign_model_classifier import SignModelClassifier
+from models.sign_model_deep import SignModelDeep
 from models.sign_model_linear import SignModelLinear
 from utils.visualization import plot_accuracy_curves, plot_loss_curves, plot_throughput
 
 log = logging.getLogger(__name__)
 
-AnyClassifier = SignModelClassifier | SignModelLinear
+AnyClassifier = SignModelClassifier | SignModelLinear | SignModelDeep
 
 # Checkpoint directories (separate from the embedding model)
 # Checkpoint dirs are set dynamically based on --model flag
@@ -527,7 +528,12 @@ def train(cfg: Config, resume_path: str | None = None, model_type: str = "classi
     # ------------------------------------------------------------------ #
     start_epoch = 0
 
-    ModelClass = SignModelLinear if model_type == "linear" else SignModelClassifier
+    if model_type == "linear":
+        ModelClass = SignModelLinear
+    elif model_type == "deep":
+        ModelClass = SignModelDeep
+    else:
+        ModelClass = SignModelClassifier
     if resume_path:
         log.info("Resuming from checkpoint: %s", resume_path)
         model, start_epoch, _ = ModelClass.load_checkpoint(resume_path, cfg, device=str(device))

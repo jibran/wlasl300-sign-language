@@ -9,13 +9,13 @@ Exposes the three core model classes::
     model.apply_phase(1)  # freeze backbone for warm-up
 """
 
+from models.classifier_head import ClassifierHead
 from models.i3d_backbone import I3DBackbone
+from models.linear_head import LinearHead
 from models.projection_head import ProjectionHead
 from models.sign_model import SignModel
-from models.sign_model_linear import SignModelLinear
 from models.sign_model_classifier import SignModelClassifier
-from models.classifier_head import ClassifierHead
-from models.linear_head import LinearHead
+from models.sign_model_linear import SignModelLinear
 
 __all__ = [
     "SignModel",

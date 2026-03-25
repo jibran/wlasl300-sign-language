@@ -47,11 +47,12 @@ from config.base_config import Config
 from dataset.data.wlasl_dataset import preprocess_live_frames
 from inference.inference import _decode_frames
 from models.sign_model_classifier import SignModelClassifier
+from models.sign_model_deep import SignModelDeep
 from models.sign_model_linear import SignModelLinear
 
 log = logging.getLogger(__name__)
 
-AnyClassifier = SignModelClassifier | SignModelLinear
+AnyClassifier = SignModelClassifier | SignModelLinear | SignModelDeep
 
 
 # =============================================================================
@@ -239,7 +240,7 @@ def parse_args() -> argparse.Namespace:
         "--model",
         type=str,
         default="classifier",
-        choices=["classifier", "linear"],
+        choices=["classifier", "linear", "deep"],
         help="Model head type used during training.",
     )
     p.add_argument("--top_k", type=int, default=5, help="Number of top predictions.")
@@ -283,7 +284,12 @@ def main() -> None:
     device = _resolve_device(args.device)
     log.info("Inference device: %s", device)
 
-    ModelClass = SignModelLinear if args.model == "linear" else SignModelClassifier
+    if args.model == "linear":
+        ModelClass = SignModelLinear
+    elif args.model == "deep":
+        ModelClass = SignModelDeep
+    else:
+        ModelClass = SignModelClassifier
     default_ckpt = f"trained_models/{args.model}/best/checkpoint.pt"
     ckpt_path = Path(args.checkpoint or default_ckpt)
     if not ckpt_path.exists():

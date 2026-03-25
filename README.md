@@ -27,7 +27,7 @@ The model extracts spatio-temporal features with a pretrained **I3D backbone**, 
 ## Architecture overview
 
 ```
-Video clip (B, 3, 64, 224, 224)
+Video clip (B, 3, 16, 256, 256)
         │
         ▼
  I3D backbone (Kinetics-400 pretrained)
