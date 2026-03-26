@@ -143,7 +143,12 @@ class SignModelDeep(torch.nn.Module):
         Returns:
             List of length ``B``, each element a list of ``k`` dicts::
 
-                [{"rank": 1, "label": "book", "score": 0.94}, ...]
+                [
+                    {"rank": 1, "label": "book", "score": 0.94},
+                    {"rank": 2, "label": "read", "score": 0.03},
+                    {"rank": 3, "label": "write", "score": 0.01},
+                    ...
+                ]
 
             Scores are softmax probabilities in ``[0, 1]``.
         """

@@ -5,21 +5,27 @@ average pool output is 2048-dimensional.  The head progressively reduces the
 feature dimension before the final classification layer:
 
     Linear(2048 → 1024, bias=False) → BatchNorm1d → ReLU → Dropout(0.4)
+    Linear(1024 → 1024, bias=False) → BatchNorm1d → ReLU → Dropout(0.4)
     Linear(1024 → 512,  bias=False) → BatchNorm1d → ReLU → Dropout(0.3)
+    Linear(512  → 512,  bias=False) → BatchNorm1d → ReLU → Dropout(0.3)
     Linear(512  → 300,  bias=True)
 
 All intermediate ``Linear`` layers use ``bias=False`` because ``BatchNorm1d``
 follows each one and provides its own learnable shift (β), making a separate
 bias redundant.  Only the final classification layer keeps ``bias=True``.
 
-Parameter count (2048 → 1024 → 512 → 300):
+Parameter count (2048 → 2048 → 1024 → 1024 → 512 → 300):
 
 - fc1: 2048 × 1024 = 2,097,152
 - bn1: 1024 × 2    = 2,048
 - fc2: 1024 × 512  = 524,288
-- bn2: 512  × 2    = 1,024
-- fc3: 512  × 300 + 300 = 153,900
-- **Total: 2,778,412 params**
+- bn2: 512 × 2    = 1,024
+- fc3: 512 × 512  = 262,144
+- bn3: 512 × 2    = 1,024
+- fc4: 512 × 512  = 262,144
+- bn4: 512 × 2    = 1,024
+- fc5: 512 × 300 + 300 = 153,900
+- **Total: 3,208,748 params**
 
 Example::
 
@@ -107,14 +113,26 @@ class DeepClassifierHead(nn.Module):
         self.relu1 = nn.ReLU(inplace=True)
         self.drop1 = nn.Dropout(p=dropout1)
 
-        # Block 2: 1024 → 512
-        self.fc2 = nn.Linear(hidden1, hidden2, bias=False)
-        self.bn2 = nn.BatchNorm1d(hidden2)
+        # Block 2: 1024 → 1024
+        self.fc2 = nn.Linear(hidden1, hidden1, bias=False)
+        self.bn2 = nn.BatchNorm1d(hidden1)
         self.relu2 = nn.ReLU(inplace=True)
-        self.drop2 = nn.Dropout(p=dropout2)
+        self.drop2 = nn.Dropout(p=dropout1)
+
+        # Block 3: 1024 → 512
+        self.fc3 = nn.Linear(hidden1, hidden2, bias=False)
+        self.bn3 = nn.BatchNorm1d(hidden2)
+        self.relu3 = nn.ReLU(inplace=True)
+        self.drop3 = nn.Dropout(p=dropout2)
+
+        # Block 4: 512 → 512
+        self.fc4 = nn.Linear(hidden2, hidden2, bias=False)
+        self.bn4 = nn.BatchNorm1d(hidden2)
+        self.relu4 = nn.ReLU(inplace=True)
+        self.drop4 = nn.Dropout(p=dropout2)
 
         # Classifier: 512 → num_classes
-        self.fc3 = nn.Linear(hidden2, num_classes, bias=True)
+        self.fc5 = nn.Linear(hidden2, num_classes, bias=True)
 
         self._init_weights()
 
@@ -134,9 +152,9 @@ class DeepClassifierHead(nn.Module):
 
     def _init_weights(self) -> None:
         """Initialise all fc layers with Kaiming normal; zero fc3 bias."""
-        for fc in (self.fc1, self.fc2, self.fc3):
+        for fc in (self.fc1, self.fc2, self.fc3, self.fc4, self.fc5):
             nn.init.kaiming_normal_(fc.weight, nonlinearity="relu")
-        nn.init.zeros_(self.fc3.bias)
+        nn.init.zeros_(self.fc5.bias)
 
     # ---------------------------------------------------------------------- #
     # Forward
@@ -159,13 +177,25 @@ class DeepClassifierHead(nn.Module):
         x = self.drop1(x)
 
         # Block 2
-        x = self.fc2(x)  # (B, 512)
+        x = self.fc2(x)  # (B, 1024)
         x = self.bn2(x)
         x = self.relu2(x)
         x = self.drop2(x)
 
+        # Block 3
+        x = self.fc3(x)  # (B, 512)
+        x = self.bn3(x)
+        x = self.relu3(x)
+        x = self.drop3(x)
+
+        # Block 4
+        x = self.fc4(x)  # (B, 512)
+        x = self.bn4(x)
+        x = self.relu4(x)
+        x = self.drop4(x)
+
         # Classifier
-        x = self.fc3(x)  # (B, num_classes)
+        x = self.fc5(x)  # (B, num_classes)
         return x
 
     # ---------------------------------------------------------------------- #
