@@ -124,6 +124,10 @@ class DatasetConfig:
         pin_memory: Pin CPU tensors for faster GPU transfer.
         loop_short_videos: Loop clips shorter than ``num_frames`` to fill them.
         max_duration_seconds: Clips longer than this are trimmed before sampling.
+        class_balanced_sampling: Use ``WeightedRandomSampler`` on the training
+            loader so every class contributes equally regardless of clip count.
+            Rare classes (14 clips) are upsampled to match common ones (40 clips).
+            Has no effect on val or test loaders.
     """
 
     num_classes: int = 300
@@ -140,6 +144,7 @@ class DatasetConfig:
     pin_memory: bool = True
     loop_short_videos: bool = True
     max_duration_seconds: float = 10.0
+    class_balanced_sampling: bool = True
 
     def __post_init__(self) -> None:
         """Validate split fractions sum to 1.0.
@@ -322,6 +327,27 @@ class SchedulerConfig:
 
 
 @dataclass(frozen=True)
+class TemporalNeckConfig:
+    """Hyperparameters for the temporal transformer neck.
+
+    Attributes:
+        d_model: Transformer internal dimension.  All attention and FFN
+            operations run at this width.  Must be divisible by ``nhead``.
+        nhead: Number of self-attention heads.
+        num_layers: Number of stacked transformer encoder layers.
+        dim_feedforward: FFN hidden dimension inside each encoder layer.
+        dropout: Dropout probability inside the transformer and on positional
+            encoding.
+    """
+
+    d_model: int = 256
+    nhead: int = 8
+    num_layers: int = 2
+    dim_feedforward: int = 1024
+    dropout: float = 0.1
+
+
+@dataclass(frozen=True)
 class EarlyStoppingConfig:
     """Early stopping criteria.
 
@@ -453,6 +479,7 @@ class Config:
     optimiser: OptimiserConfig = field(default_factory=OptimiserConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     early_stopping: EarlyStoppingConfig = field(default_factory=EarlyStoppingConfig)
+    temporal_neck: TemporalNeckConfig = field(default_factory=TemporalNeckConfig)
     checkpointing: CheckpointingConfig = field(default_factory=CheckpointingConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
@@ -503,6 +530,7 @@ class Config:
             optimiser=_build(OptimiserConfig, _get("optimiser", OptimiserConfig)),
             scheduler=_build(SchedulerConfig, _get("scheduler", SchedulerConfig)),
             early_stopping=_build(EarlyStoppingConfig, _get("early_stopping", EarlyStoppingConfig)),
+            temporal_neck=_build(TemporalNeckConfig, _get("temporal_neck", TemporalNeckConfig)),
             checkpointing=_build(CheckpointingConfig, _get("checkpointing", CheckpointingConfig)),
             evaluation=_build(EvaluationConfig, _get("evaluation", EvaluationConfig)),
             logging=_build(LoggingConfig, _get("logging", LoggingConfig)),

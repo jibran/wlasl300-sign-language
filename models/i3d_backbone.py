@@ -158,6 +158,37 @@ class I3DBackbone(nn.Module):
         """
         return self._backbone(x)
 
+    def forward_features(self, x: Tensor) -> Tensor:
+        """Extract pre-pool 5-D feature map for use with a temporal neck.
+
+        Unlike :meth:`forward`, this method returns the raw spatial-temporal
+        feature map *before* global average pooling, giving shape
+        ``(B, C, T', H', W')``.  The temporal neck then pools each frame
+        token individually and passes the sequence through a transformer.
+
+        For ``i3d_r50`` with 16-frame input at 256×256:
+            - T' = 2  (temporal stride of I3D)
+            - H' = W' = 8  (spatial stride of ~32×)
+            - C  = 2048
+
+        Args:
+            x: Input tensor ``(B, C, T, H, W)``, float32, ImageNet-normalised.
+
+        Returns:
+            Feature map ``(B, C, T', H', W')``, float32.
+
+        Raises:
+            NotImplementedError: If the backbone wrapper does not support
+                pre-pool feature extraction (e.g. torchvision fallback).
+        """
+        if not hasattr(self._backbone, "forward_features"):
+            raise NotImplementedError(
+                "forward_features() is only supported with the pytorchvideo "
+                "backend (_PytorchVideoWrapper).  The torchvision fallback "
+                "does not expose intermediate feature maps."
+            )
+        return self._backbone.forward_features(x)
+
     # ---------------------------------------------------------------------- #
     # Output dim probing
     # ---------------------------------------------------------------------- #
@@ -484,16 +515,27 @@ class _PytorchVideoWrapper(nn.Module):
         Returns:
             Feature tensor ``(B, output_dim)``.
         """
+        features = self.forward_features(x)  # (B, C, T', H', W')
+        features = self.pool(features)  # (B, C, 1, 1, 1)
+        features = self.flatten(features)  # (B, C)
+        return features
+
+    def forward_features(self, x: Tensor) -> Tensor:
+        """Return the pre-pool 5-D feature map for temporal neck use.
+
+        Args:
+            x: Input tensor ``(B, C, T, H, W)``.
+
+        Returns:
+            Feature map ``(B, C, T', H', W')`` before global average pool.
+        """
         # Pass tensor directly — current pytorchvideo (>=0.1.5) expects a
         # plain Tensor, not a list.  Older versions expected [x]; that caused
         # "conv3d() received list instead of Tensor".
         features = self.feature_blocks(x)
         if isinstance(features, (list, tuple)):
             features = features[0]
-        # features: (B, C, T', H', W')
-        features = self.pool(features)  # (B, C, 1, 1, 1)
-        features = self.flatten(features)  # (B, C)
-        return features
+        return features  # (B, C, T', H', W')
 
 
 class _TorchvisionWrapper(nn.Module):

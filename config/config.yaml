@@ -76,6 +76,11 @@ dataset:
   test_split: 0.15
   split_seed: 42  # Fix this to get the same split every time
 
+  # Use WeightedRandomSampler to equalise class frequency during training.
+  # Rare classes (14 clips) are upsampled to match common ones (40 clips).
+  # Set to false to use standard random shuffle instead.
+  class_balanced_sampling: true
+
   # Number of worker processes for DataLoader
   # Set to 0 for debugging (single-process, easier to read tracebacks)
   num_workers: 4
@@ -257,6 +262,20 @@ scheduler:
 # -----------------------------------------------------------------------------
 # Early stopping
 # -----------------------------------------------------------------------------
+# Temporal transformer neck hyperparameters
+# Only used when --model temporal is passed to train_classifier.py
+temporal_neck:
+  # Transformer internal dimension (must be divisible by nhead)
+  d_model: 256
+  # Number of self-attention heads
+  nhead: 8
+  # Number of stacked transformer encoder layers (2 for GTX 1660 Ti, 4 for A100)
+  num_layers: 2
+  # FFN hidden dimension inside each encoder layer (4 x d_model)
+  dim_feedforward: 1024
+  # Dropout probability inside transformer and on positional encoding
+  dropout: 0.1
+
 early_stopping:
   # Set to false to disable early stopping and always train for the full epoch count
   enabled: true

@@ -50,11 +50,12 @@ from dataset.data.wlasl_dataset import build_dataloaders
 from models.sign_model_classifier import SignModelClassifier
 from models.sign_model_deep import SignModelDeep
 from models.sign_model_linear import SignModelLinear
+from models.sign_model_temporal import SignModelTemporal
 from utils.visualization import plot_accuracy_curves, plot_loss_curves, plot_throughput
 
 log = logging.getLogger(__name__)
 
-AnyClassifier = SignModelClassifier | SignModelLinear | SignModelDeep
+AnyClassifier = SignModelClassifier | SignModelLinear | SignModelDeep | SignModelTemporal
 
 # Checkpoint directories (separate from the embedding model)
 # Checkpoint dirs are set dynamically based on --model flag
@@ -158,15 +159,18 @@ def build_optimiser(
     opt_cfg = cfg.optimiser
 
     backbone_params = [p for p in model.backbone.parameters() if p.requires_grad]
+    # Neck parameters (temporal transformer) train at the same LR as the head
+    neck_params = list(model.neck.parameters()) if hasattr(model, "neck") else []
     head_params = list(model.head.parameters())
+    fast_params = neck_params + head_params
 
     if backbone_params:
         param_groups = [
             {"params": backbone_params, "lr": lr * 0.1},
-            {"params": head_params, "lr": lr},
+            {"params": fast_params, "lr": lr},
         ]
     else:
-        param_groups = [{"params": head_params, "lr": lr}]
+        param_groups = [{"params": fast_params, "lr": lr}]
 
     optimiser = AdamW(
         param_groups,
@@ -499,7 +503,7 @@ def train(cfg: Config, resume_path: str | None = None, model_type: str = "classi
     Args:
         cfg: Fully populated project config.
         resume_path: Optional path to a checkpoint to resume from.
-        model_type: ``"classifier"`` (deep FC head) or ``"linear"`` (single linear layer).
+        model_type: ``"classifier"``, ``"linear"``, ``"deep"``, or ``"temporal"``.
     """
     logging.basicConfig(
         level=getattr(logging, cfg.logging.log_level.upper(), logging.INFO),
@@ -532,6 +536,8 @@ def train(cfg: Config, resume_path: str | None = None, model_type: str = "classi
         ModelClass = SignModelLinear
     elif model_type == "deep":
         ModelClass = SignModelDeep
+    elif model_type == "temporal":
+        ModelClass = SignModelTemporal
     else:
         ModelClass = SignModelClassifier
     if resume_path:
@@ -748,8 +754,9 @@ def parse_args() -> argparse.Namespace:
         "--model",
         type=str,
         default="classifier",
-        choices=["classifier", "linear"],
-        help='Head type: "classifier" (deep FC) or "linear" (single layer).',
+        choices=["classifier", "linear", "deep", "temporal"],
+        help='Head type: "classifier" (deep FC), "linear" (single layer),'
+        ' "deep" (deep FC), or "temporal" (temporal model).',
     )
     p.add_argument(
         "--label_smoothing",

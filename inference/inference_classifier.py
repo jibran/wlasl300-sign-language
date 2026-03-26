@@ -49,10 +49,11 @@ from inference.inference import _decode_frames
 from models.sign_model_classifier import SignModelClassifier
 from models.sign_model_deep import SignModelDeep
 from models.sign_model_linear import SignModelLinear
+from models.sign_model_temporal import SignModelTemporal
 
 log = logging.getLogger(__name__)
 
-AnyClassifier = SignModelClassifier | SignModelLinear | SignModelDeep
+AnyClassifier = SignModelClassifier | SignModelLinear | SignModelDeep | SignModelTemporal
 
 
 # =============================================================================
@@ -240,7 +241,7 @@ def parse_args() -> argparse.Namespace:
         "--model",
         type=str,
         default="classifier",
-        choices=["classifier", "linear", "deep"],
+        choices=["classifier", "linear", "deep", "temporal"],
         help="Model head type used during training.",
     )
     p.add_argument("--top_k", type=int, default=5, help="Number of top predictions.")
@@ -288,6 +289,8 @@ def main() -> None:
         ModelClass = SignModelLinear
     elif args.model == "deep":
         ModelClass = SignModelDeep
+    elif args.model == "temporal":
+        ModelClass = SignModelTemporal
     else:
         ModelClass = SignModelClassifier
     default_ckpt = f"trained_models/{args.model}/best/checkpoint.pt"

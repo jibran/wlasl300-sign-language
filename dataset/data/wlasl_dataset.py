@@ -583,8 +583,10 @@ def build_dataloaders(
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Construct train, val, and test DataLoaders from a Config object.
 
-    Uses ``WeightedRandomSampler`` for the training loader to compensate
-    for class imbalance.  Val and test loaders use sequential sampling.
+    When ``cfg.dataset.class_balanced_sampling`` is ``True`` (the default),
+    the training loader uses ``WeightedRandomSampler`` so every class
+    contributes equally regardless of clip count.  Val and test loaders
+    always use sequential sampling.
 
     Args:
         cfg: Fully populated :class:`~config.base_config.Config`.
@@ -603,6 +605,8 @@ def build_dataloaders(
             # videos: (B, 3, 16, 256, 256)
             ...
     """
+    from collections import Counter
+
     from torch.utils.data import WeightedRandomSampler
 
     paths = cfg.paths
@@ -617,11 +621,28 @@ def build_dataloaders(
     val_ds = WLASL300Dataset(split="val", cache_dir=paths.processed_dir, **shared)
     test_ds = WLASL300Dataset(split="test", cache_dir=paths.processed_dir, **shared)
 
-    train_sampler = WeightedRandomSampler(
-        weights=train_ds.get_class_weights(),
-        num_samples=len(train_ds),
-        replacement=True,
-    )
+    use_balanced = getattr(cfg.dataset, "class_balanced_sampling", True)
+
+    if use_balanced:
+        weights = train_ds.get_class_weights()
+        train_sampler = WeightedRandomSampler(
+            weights=weights,
+            num_samples=len(train_ds),
+            replacement=True,
+        )
+        counts = Counter(r["label_idx"] for r in train_ds._records)
+        log.info(
+            "WeightedRandomSampler enabled — %d classes  " "min=%d  max=%d  mean=%.1f clips/class",
+            len(counts),
+            min(counts.values()),
+            max(counts.values()),
+            sum(counts.values()) / len(counts),
+        )
+        train_shuffle = False
+    else:
+        train_sampler = None
+        train_shuffle = True
+        log.info("WeightedRandomSampler disabled — using sequential shuffle")
 
     loader_kwargs = dict(
         num_workers=cfg.dataset.num_workers,
@@ -633,6 +654,7 @@ def build_dataloaders(
         train_ds,
         batch_size=cfg.training.batch_size,
         sampler=train_sampler,
+        shuffle=train_shuffle if train_sampler is None else False,
         drop_last=True,
         **loader_kwargs,
     )
