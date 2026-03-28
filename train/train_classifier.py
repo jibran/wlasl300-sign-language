@@ -492,18 +492,55 @@ def _save_latest(
     )
 
 
+def _save_epoch(
+    model: AnyClassifier,
+    epoch: int,
+    metrics: dict[str, float],
+    cfg: Config,
+    epochs_dir: str,
+) -> None:
+    """Save a numbered per-epoch checkpoint to ``trained_models/<model>/epochs/``.
+
+    Filenames are zero-padded to 3 digits so they sort correctly on disk:
+    ``epoch_001.pt``, ``epoch_002.pt``, …
+
+    Args:
+        model: Classifier model.
+        epoch: Current epoch (0-based).  Saved filename uses 1-based numbering.
+        metrics: Metrics dict at this epoch (train or val depending on skip_val).
+        cfg: Project config.
+        epochs_dir: Directory to write the checkpoint into.
+    """
+    path = Path(epochs_dir) / f"epoch_{epoch + 1:03d}.pt"
+    model.save_checkpoint(path=path, epoch=epoch, metrics=metrics, cfg=cfg)
+    log.info("Epoch checkpoint saved → %s", path)
+
+
 # =============================================================================
 # Main training loop
 # =============================================================================
 
 
-def train(cfg: Config, resume_path: str | None = None, model_type: str = "classifier") -> None:
+def train(
+    cfg: Config,
+    resume_path: str | None = None,
+    model_type: str = "classifier",
+    skip_test: bool = False,
+    skip_val: bool = False,
+    save_all_epochs: bool = False,
+) -> None:
     """Run the full three-phase classifier training pipeline.
 
     Args:
         cfg: Fully populated project config.
         resume_path: Optional path to a checkpoint to resume from.
         model_type: ``"classifier"``, ``"linear"``, ``"deep"``, or ``"temporal"``.
+        skip_test: If ``True``, skip the final test evaluation after training.
+        skip_val: If ``True``, skip per-epoch validation. Checkpoints are saved
+            every epoch based on train loss. Early stopping is disabled.
+        save_all_epochs: If ``True``, save a numbered checkpoint after every
+            epoch to ``trained_models/<model>/epochs/epoch_NNN.pt``.
+            Useful with ``--skip_val`` so validation can be run offline later.
     """
     logging.basicConfig(
         level=getattr(logging, cfg.logging.log_level.upper(), logging.INFO),
@@ -516,16 +553,22 @@ def train(cfg: Config, resume_path: str | None = None, model_type: str = "classi
 
     best_dir = f"trained_models/{model_type}/best"
     latest_dir = f"trained_models/{model_type}/latest"
+    epochs_dir = f"trained_models/{model_type}/epochs"
     log_dir = f"logs/{model_type}"
     Path(best_dir).mkdir(parents=True, exist_ok=True)
     Path(latest_dir).mkdir(parents=True, exist_ok=True)
+    if save_all_epochs:
+        Path(epochs_dir).mkdir(parents=True, exist_ok=True)
+        log.info("Per-epoch checkpoints → %s", epochs_dir)
     Path(log_dir).mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------ #
     # Data
     # ------------------------------------------------------------------ #
     log.info("Building dataloaders …")
-    train_loader, val_loader, test_loader = build_dataloaders(cfg)
+    train_loader, val_loader, test_loader = build_dataloaders(
+        cfg, skip_test=skip_test, skip_val=skip_val
+    )
 
     # ------------------------------------------------------------------ #
     # Model
@@ -629,50 +672,83 @@ def train(cfg: Config, resume_path: str | None = None, model_type: str = "classi
         )
 
         # Validate
-        val_metrics = evaluate(
-            model=model,
-            loader=val_loader,
-            cfg=cfg,
-            epoch=epoch,
-            split="val",
-            device=device,
-            label_smoothing=label_smoothing,
-        )
-
-        # History
-        train_losses.append(train_metrics["loss"])
-        val_losses.append(val_metrics["loss"])
-        top1_history.append(val_metrics["top1"])
-        top5_history.append(val_metrics["top5"])
-        throughput_history.append(train_metrics["throughput_clips_per_sec"])
-
-        log.info(
-            "  train top1=%.3f  top5=%.3f  |  val top1=%.3f  top5=%.3f",
-            train_metrics["top1"],
-            train_metrics["top5"],
-            val_metrics["top1"],
-            val_metrics["top5"],
-        )
-
-        # Checkpoint latest
-        _save_latest(model, optimiser, scheduler, epoch, val_metrics, cfg, latest_dir=latest_dir)
-
-        # Checkpoint best
-        val_top1 = val_metrics["top1"]
-        if val_top1 > best_top1 + es_cfg.min_delta:
-            best_top1 = val_top1
-            epochs_without_improvement = 0
-            _save_best(model, epoch, val_metrics, cfg, best_dir=best_dir)
+        if skip_val:
+            val_metrics = None
+            train_losses.append(train_metrics["loss"])
+            top1_history.append(train_metrics["top1"])
+            top5_history.append(train_metrics["top5"])
+            throughput_history.append(train_metrics["throughput_clips_per_sec"])
+            _save_latest(
+                model,
+                optimiser,
+                scheduler,
+                epoch,
+                train_metrics,
+                cfg,
+                latest_dir=latest_dir,
+            )
+            if save_all_epochs:
+                _save_epoch(model, epoch, train_metrics, cfg, epochs_dir)
         else:
-            epochs_without_improvement += 1
-            log.info(
-                "No improvement for %d/%d epochs  (best top1=%.4f)",
-                epochs_without_improvement,
-                es_cfg.patience,
-                best_top1,
+            val_metrics = evaluate(
+                model=model,
+                loader=val_loader,
+                cfg=cfg,
+                epoch=epoch,
+                split="val",
+                device=device,
+                label_smoothing=label_smoothing,
             )
 
-        if es_cfg.enabled and epochs_without_improvement >= es_cfg.patience and phase == 3:
+            # History
+            train_losses.append(train_metrics["loss"])
+            val_losses.append(val_metrics["loss"])
+            top1_history.append(val_metrics["top1"])
+            top5_history.append(val_metrics["top5"])
+            throughput_history.append(train_metrics["throughput_clips_per_sec"])
+
+            log.info(
+                "  train top1=%.3f  top5=%.3f  |  val top1=%.3f  top5=%.3f",
+                train_metrics["top1"],
+                train_metrics["top5"],
+                val_metrics["top1"],
+                val_metrics["top5"],
+            )
+
+            # Checkpoint latest
+            _save_latest(
+                model,
+                optimiser,
+                scheduler,
+                epoch,
+                val_metrics,
+                cfg,
+                latest_dir=latest_dir,
+            )
+            if save_all_epochs:
+                _save_epoch(model, epoch, val_metrics, cfg, epochs_dir)
+
+            # Checkpoint best
+            val_top1 = val_metrics["top1"]
+            if val_top1 > best_top1 + es_cfg.min_delta:
+                best_top1 = val_top1
+                epochs_without_improvement = 0
+                _save_best(model, epoch, val_metrics, cfg, best_dir=best_dir)
+            else:
+                epochs_without_improvement += 1
+                log.info(
+                    "No improvement for %d/%d epochs  (best top1=%.4f)",
+                    epochs_without_improvement,
+                    es_cfg.patience,
+                    best_top1,
+                )
+
+        if (
+            not skip_val
+            and es_cfg.enabled
+            and epochs_without_improvement >= es_cfg.patience
+            and phase == 3
+        ):
             log.info(
                 "Early stopping triggered at epoch %d  (best top1=%.4f)",
                 epoch + 1,
@@ -683,23 +759,26 @@ def train(cfg: Config, resume_path: str | None = None, model_type: str = "classi
     # ------------------------------------------------------------------ #
     # Final test evaluation
     # ------------------------------------------------------------------ #
-    log.info("Running final test evaluation …")
-    best_ckpt = Path(best_dir) / "checkpoint.pt"
-    if best_ckpt.exists():
-        model, _, _ = ModelClass.load_checkpoint(str(best_ckpt), cfg, device=str(device))
-    test_metrics = evaluate(
-        model=model,
-        loader=test_loader,
-        cfg=cfg,
-        epoch=total_epochs - 1,
-        split="test",
-        device=device,
-    )
-    log.info(
-        "Test  top1=%.4f  top5=%.4f",
-        test_metrics["top1"],
-        test_metrics["top5"],
-    )
+    if skip_test:
+        log.info("Skipping test evaluation (--skip_test flag set).")
+    else:
+        log.info("Running final test evaluation …")
+        best_ckpt = Path(best_dir) / "checkpoint.pt"
+        if best_ckpt.exists():
+            model, _, _ = ModelClass.load_checkpoint(str(best_ckpt), cfg, device=str(device))
+        test_metrics = evaluate(
+            model=model,
+            loader=test_loader,
+            cfg=cfg,
+            epoch=total_epochs - 1,
+            split="test",
+            device=device,
+        )
+        log.info(
+            "Test  top1=%.4f  top5=%.4f",
+            test_metrics["top1"],
+            test_metrics["top5"],
+        )
 
     # ------------------------------------------------------------------ #
     # Plots
@@ -754,9 +833,8 @@ def parse_args() -> argparse.Namespace:
         "--model",
         type=str,
         default="classifier",
-        choices=["classifier", "linear", "deep", "temporal"],
-        help='Head type: "classifier" (deep FC), "linear" (single layer),'
-        ' "deep" (deep FC), or "temporal" (temporal model).',
+        choices=["classifier", "linear"],
+        help='Head type: "classifier" (deep FC) or "linear" (single layer).',
     )
     p.add_argument(
         "--label_smoothing",
@@ -781,6 +859,27 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Override phase 3 epoch count (full unfreeze).",
+    )
+    p.add_argument(
+        "--skip_test",
+        action="store_true",
+        default=False,
+        help="Skip final test evaluation (faster iteration during experiments).",
+    )
+    p.add_argument(
+        "--skip_val",
+        action="store_true",
+        default=False,
+        help="Skip per-epoch validation. Saves ~10%% time per epoch. "
+        "Early stopping is disabled. Checkpoints saved every epoch.",
+    )
+    p.add_argument(
+        "--save_all_epochs",
+        action="store_true",
+        default=False,
+        help="Save a numbered checkpoint after every epoch to "
+        "trained_models/<model>/epochs/epoch_NNN.pt. "
+        "Pairs well with --skip_val for offline evaluation.",
     )
     return p.parse_args()
 
@@ -824,7 +923,14 @@ def main() -> None:
         new_training = dataclasses.replace(cfg.training, epochs=args.epochs)
         cfg = dataclasses.replace(cfg, training=new_training)
 
-    train(cfg, resume_path=args.resume, model_type=args.model)
+    train(
+        cfg,
+        resume_path=args.resume,
+        model_type=args.model,
+        skip_test=args.skip_test,
+        skip_val=args.skip_val,
+        save_all_epochs=args.save_all_epochs,
+    )
 
 
 if __name__ == "__main__":

@@ -580,6 +580,8 @@ class WLASL300Dataset(Dataset):
 
 def build_dataloaders(
     cfg: object,
+    skip_test: bool = False,
+    skip_val: bool = False,
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Construct train, val, and test DataLoaders from a Config object.
 
@@ -618,8 +620,14 @@ def build_dataloaders(
     )
 
     train_ds = WLASL300Dataset(split="train", cache_dir=None, **shared)
-    val_ds = WLASL300Dataset(split="val", cache_dir=paths.processed_dir, **shared)
-    test_ds = WLASL300Dataset(split="test", cache_dir=paths.processed_dir, **shared)
+    val_ds = (
+        None if skip_val else WLASL300Dataset(split="val", cache_dir=paths.processed_dir, **shared)
+    )
+    test_ds = (
+        None
+        if skip_test
+        else WLASL300Dataset(split="test", cache_dir=paths.processed_dir, **shared)
+    )
 
     use_balanced = getattr(cfg.dataset, "class_balanced_sampling", True)
 
@@ -658,25 +666,33 @@ def build_dataloaders(
         drop_last=True,
         **loader_kwargs,
     )
-    val_loader = DataLoader(
-        val_ds,
-        batch_size=cfg.training.batch_size * 2,
-        shuffle=False,
-        drop_last=False,
-        **loader_kwargs,
+    val_loader = (
+        None
+        if skip_val
+        else DataLoader(
+            val_ds,
+            batch_size=cfg.training.batch_size * 2,
+            shuffle=False,
+            drop_last=False,
+            **loader_kwargs,
+        )
     )
-    test_loader = DataLoader(
-        test_ds,
-        batch_size=cfg.training.batch_size * 2,
-        shuffle=False,
-        drop_last=False,
-        **loader_kwargs,
+    test_loader = (
+        None
+        if skip_test
+        else DataLoader(
+            test_ds,
+            batch_size=cfg.training.batch_size * 2,
+            shuffle=False,
+            drop_last=False,
+            **loader_kwargs,
+        )
     )
 
     log.info(
-        "DataLoaders — train=%d  val=%d  test=%d batches",
+        "DataLoaders — train=%d  val=%s  test=%s batches",
         len(train_loader),
-        len(val_loader),
-        len(test_loader),
+        len(val_loader) if val_loader is not None else "skipped",
+        len(test_loader) if test_loader is not None else "skipped",
     )
     return train_loader, val_loader, test_loader
