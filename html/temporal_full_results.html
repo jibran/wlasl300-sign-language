@@ -1,0 +1,151 @@
+
+<style>
+.stat-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:0 0 18px;}
+.stat{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 12px;}
+.stat.hi{background:var(--color-background-info);}
+.stat .lbl{font-size:11px;color:var(--color-text-secondary);margin:0 0 2px;}
+.stat.hi .lbl{color:var(--color-text-info);}
+.stat .val{font-size:17px;font-weight:500;margin:0;}
+.stat.hi .val{color:var(--color-text-info);}
+.stat .sub{font-size:10px;color:var(--color-text-tertiary);margin:2px 0 0;}
+.stat.hi .sub{color:var(--color-text-info);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:0 0 14px;}
+.card{background:var(--color-background-secondary);border-radius:var(--border-radius-lg);padding:14px;}
+.leg{display:flex;gap:14px;margin:0 0 8px;font-size:11px;color:var(--color-text-secondary);flex-wrap:wrap;}
+.leg span{display:flex;align-items:center;gap:4px;}
+.sw{width:18px;height:3px;border-radius:2px;display:inline-block;}
+</style>
+
+<div class="stat-row">
+  <div class="stat hi">
+    <p class="lbl">Temporal (best)</p>
+    <p class="val">24.3%</p>
+    <p class="sub">test top-1 · 54.6% top-5</p>
+  </div>
+  <div class="stat">
+    <p class="lbl">Temporal val peak</p>
+    <p class="val">23.6%</p>
+    <p class="sub">epoch 40 · still rising</p>
+  </div>
+  <div class="stat">
+    <p class="lbl">Classifier (baseline)</p>
+    <p class="val">13.1%</p>
+    <p class="sub">test top-1 · 20 epochs</p>
+  </div>
+  <div class="stat">
+    <p class="lbl">Improvement</p>
+    <p class="val">+11.2pp</p>
+    <p class="sub">test top-1 vs classifier</p>
+  </div>
+  <div class="stat">
+    <p class="lbl">Phase 2 start</p>
+    <p class="val">epoch 21</p>
+    <p class="sub">+14.7pp gain in phase 2</p>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <div class="leg">
+      <span><b class="sw" style="background:#534AB7"></b>Temporal val</span>
+      <span><b class="sw" style="background:#1D9E75"></b>Temporal train</span>
+      <span><b class="sw" style="background:#888780;opacity:.5"></b>Classifier val @20</span>
+    </div>
+    <div style="position:relative;height:210px;"><canvas id="c1"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="leg">
+      <span><b class="sw" style="background:#534AB7"></b>Temporal val top-5</span>
+      <span><b class="sw" style="background:#1D9E75"></b>Temporal train top-5</span>
+    </div>
+    <div style="position:relative;height:210px;"><canvas id="c2"></canvas></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="leg">
+    <span><b class="sw" style="background:#534AB7"></b>Temporal</span>
+    <span><b class="sw" style="background:#1D9E75"></b>Classifier</span>
+    <span><b class="sw" style="background:#D85A30"></b>Deep</span>
+    <span><b class="sw" style="background:#888780"></b>Linear</span>
+    <span><b class="sw" style="background:#D4537E"></b>Embedding</span>
+  </div>
+  <div style="position:relative;height:180px;"><canvas id="c3"></canvas></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const PURPLE='#534AB7',TEAL='#1D9E75',CORAL='#D85A30',GRAY='#888780',PINK='#D4537E';
+const grid='rgba(128,128,128,0.1)';
+
+const ep40 = Array.from({length:40},(_,i)=>i+1);
+
+const tmp_val_t1 = [0.7,1.3,2.0,5.0,5.1,5.7,8.1,8.5,9.3,9.2,5.9,5.9,6.7,6.5,8.8,10.7,11.5,12.1,12.3,14.9,12.3,13.9,15.0,15.6,15.8,16.6,15.8,15.4,15.6,17.0,17.0,18.9,18.8,19.8,21.9,22.1,22.0,21.5,22.8,23.6];
+const tmp_trn_t1= [0.6,0.8,1.7,2.1,3.4,4.0,4.7,4.7,6.2,6.1,5.4,5.6,6.3,7.0,9.3,8.5,10.4,11.2,11.1,12.6,9.9,12.3,13.6,12.8,14.7,15.4,15.2,14.6,16.6,14.6,15.5,18.0,17.2,20.6,20.3,20.8,22.5,22.9,24.4,24.4];
+const tmp_val_t5 = [2.4,5.5,8.2,15.1,17.5,22.5,25.2,26.7,27.5,28.1,19.3,23.7,25.6,28.7,33.0,35.9,36.3,36.3,38.0,41.3,37.2,39.8,42.4,44.8,44.3,44.9,45.7,44.7,45.7,45.9,47.1,49.8,49.6,51.4,52.3,52.9,53.0,55.4,54.8,55.6];
+const tmp_trn_t5= [2.1,3.1,6.2,9.2,12.0,15.6,17.3,18.7,20.0,21.8,19.2,20.3,22.2,24.4,30.0,28.2,32.6,34.0,35.7,38.1,29.5,36.7,39.9,39.1,42.6,41.9,41.4,43.3,42.8,41.9,44.5,47.1,47.8,51.4,52.4,53.6,55.4,55.7,58.2,59.1];
+
+const baseOpts = (yLabel, max) => ({
+  responsive:true, maintainAspectRatio:false, animation:false,
+  plugins:{legend:{display:false},
+    annotation:{annotations:{
+      p2:{type:'line',xMin:20.5,xMax:20.5,borderColor:'rgba(128,128,128,0.35)',borderWidth:1,borderDash:[4,3]}
+    }}
+  },
+  scales:{
+    x:{grid:{color:grid},ticks:{font:{size:9},color:'#888',maxTicksLimit:10}},
+    y:{grid:{color:grid},title:{display:true,text:yLabel,font:{size:9},color:'#888'},
+       ticks:{font:{size:9},color:'#888'},min:0,max:max}
+  }
+});
+
+new Chart(document.getElementById('c1'),{
+  type:'line',
+  data:{labels:ep40,datasets:[
+    {data:tmp_val_t1,borderColor:PURPLE,borderWidth:2,pointRadius:0,tension:0.3,spanGaps:false},
+    {data:tmp_trn_t1,borderColor:TEAL,borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:0.3},
+    {data:Array(20).fill(14.0),borderColor:GRAY,borderWidth:1,borderDash:[2,4],pointRadius:0},
+  ]},
+  options:{...baseOpts('val / train top-1 (%)',30),plugins:{legend:{display:false},
+    title:{display:true,text:'Top-1 accuracy — 40 epochs (phase 1→2)',font:{size:11}},
+    annotation:{annotations:{
+      p2:{type:'line',xMin:20.5,xMax:20.5,borderColor:'rgba(128,128,128,0.35)',borderWidth:1,borderDash:[4,3]},
+      lbl:{type:'label',xValue:20.5,yValue:28,content:['phase 2'],font:{size:9},color:'#888',position:{x:'center',y:'start'}}
+    }}
+  }}
+});
+
+new Chart(document.getElementById('c2'),{
+  type:'line',
+  data:{labels:ep40,datasets:[
+    {data:tmp_val_t5,borderColor:PURPLE,borderWidth:2,pointRadius:0,tension:0.3},
+    {data:tmp_trn_t5,borderColor:TEAL,borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:0.3},
+  ]},
+  options:{...baseOpts('top-5 (%)',65),plugins:{legend:{display:false},
+    title:{display:true,text:'Top-5 accuracy — 40 epochs',font:{size:11}},
+    annotation:{annotations:{
+      p2:{type:'line',xMin:20.5,xMax:20.5,borderColor:'rgba(128,128,128,0.35)',borderWidth:1,borderDash:[4,3]}
+    }}
+  }}
+});
+
+new Chart(document.getElementById('c3'),{
+  type:'bar',
+  data:{
+    labels:['Linear\n(20ep)','Embedding\n(43ep)','Deep\n(20ep)','Classifier\n(20ep)','Temporal\n(40ep)'],
+    datasets:[
+      {label:'test top-1',data:[8.8,8.8,12.8,13.1,24.3],backgroundColor:[GRAY+'99',PINK+'99',CORAL+'99',TEAL+'99',PURPLE],borderWidth:0},
+      {label:'test top-5',data:[22.9,23.9,33.2,34.2,54.6],backgroundColor:[GRAY+'44',PINK+'44',CORAL+'44',TEAL+'44',PURPLE+'66'],borderWidth:0},
+    ]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,animation:false,
+    plugins:{legend:{display:false},title:{display:true,text:'All models — test top-1 and top-5',font:{size:11}}},
+    scales:{
+      x:{grid:{display:false},ticks:{font:{size:10},color:'#888'}},
+      y:{grid:{color:grid},ticks:{font:{size:9},color:'#888'},max:65,
+         title:{display:true,text:'accuracy (%)',font:{size:9},color:'#888'}}
+    }
+  }
+});
+</script>

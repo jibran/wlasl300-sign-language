@@ -1,0 +1,319 @@
+
+<style>
+  canvas { display: block; }
+  .ctrl { display:flex; align-items:center; gap:12px; margin:10px 0 4px; font-size:13px; color:var(--color-text-secondary); flex-wrap:wrap; }
+  .ctrl button { font-size:12px; padding:4px 14px; }
+  .info-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:12px 0 0; }
+  .info-card { background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:10px 14px; }
+  .info-card .lbl { font-size:11px; color:var(--color-text-secondary); margin:0 0 2px; }
+  .info-card .val { font-size:15px; font-weight:500; color:var(--color-text-primary); margin:0; }
+</style>
+
+<canvas id="c" width="660" height="380"></canvas>
+
+<div class="ctrl">
+  <button id="btn">Pause</button>
+  <label style="display:flex;align-items:center;gap:6px;">Speed
+    <input type="range" id="spd" min="1" max="5" value="2" step="1" style="width:80px">
+    <span id="spd-lbl">2×</span>
+  </label>
+  <label style="display:flex;align-items:center;gap:6px;">Kernel
+    <select id="ksel" style="font-size:12px;padding:2px 6px;">
+      <option value="3">3×3×3  (inflated — i3d_r50)</option>
+      <option value="1">1×1×1  (pointwise)</option>
+    </select>
+  </label>
+</div>
+
+<div class="info-row">
+  <div class="info-card">
+    <p class="lbl">Current kernel position</p>
+    <p class="val" id="pos-lbl">(t=0, y=0, x=0)</p>
+  </div>
+  <div class="info-card">
+    <p class="lbl">Output voxels computed</p>
+    <p class="val" id="out-lbl">0 / 0</p>
+  </div>
+  <div class="info-card">
+    <p class="lbl">Receptive field</p>
+    <p class="val" id="rf-lbl">3 frames × 3×3 spatial</p>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+const W = 660, H = 380;
+
+let K = 3;
+let playing = true;
+let speedMul = 2;
+let progress = 0;
+let raf;
+
+const IN_T = 5, IN_H = 5, IN_W = 5;
+
+function getLayout(k) {
+  const cellIn = 34, cellOut = 34, cellKern = 28;
+  const gapIn = 3, gapKern = 3, gapOut = 3;
+  const sxIn = 28, syIn = 30;
+  const sxKern = sxIn + IN_W*(cellIn+gapIn) + 18;
+  const syKern = syIn + 20;
+  const sxOut = sxKern + k*(cellKern+gapKern) + 22;
+  const OUT_T = IN_T - k + 1, OUT_H = IN_H - k + 1, OUT_W = IN_W - k + 1;
+  return { cellIn, cellOut, cellKern, gapIn, gapKern, gapOut, sxIn, syIn, sxKern, syKern, sxOut, syOut: syIn+20, OUT_T, OUT_H, OUT_W };
+}
+
+function isDark() {
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function colors() {
+  const dark = isDark();
+  return {
+    bg:       dark ? '#1e1e1e'  : '#ffffff',
+    cell:     dark ? '#2d2b40'  : '#EEEDFE',
+    cellStr:  dark ? '#7F77DD'  : '#7F77DD',
+    highlight:dark ? '#534AB7'  : '#534AB7',
+    hlText:   dark ? '#ffffff'  : '#ffffff',
+    kern:     dark ? '#0F6E56'  : '#5DCAA5',
+    kernStr:  dark ? '#1D9E75'  : '#0F6E56',
+    out:      dark ? '#854F0B'  : '#EF9F27',
+    outFill:  dark ? '#633806'  : '#FAC775',
+    outStr:   dark ? '#EF9F27'  : '#BA7517',
+    outDone:  dark ? '#3d2a0a'  : '#FAEEDA',
+    text:     dark ? '#c2c0b6'  : '#3d3d3a',
+    dim:      dark ? '#38363a'  : '#f0eff8',
+    dimStr:   dark ? '#4a4850'  : '#d0cee8',
+    label:    dark ? '#9c9a92'  : '#73726c',
+  };
+}
+
+function drawGrid(sx, sy, rows, cols, cell, gap, fillFn, strokeFn, textFn) {
+  for (let r = 0; r < rows; r++) {
+    for (let c2 = 0; c2 < cols; c2++) {
+      const x = sx + c2*(cell+gap);
+      const y = sy + r*(cell+gap);
+      ctx.fillStyle = fillFn(r, c2);
+      ctx.strokeStyle = strokeFn(r, c2);
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.roundRect(x, y, cell, cell, 3);
+      ctx.fill();
+      ctx.stroke();
+      const txt = textFn(r, c2);
+      if (txt) {
+        ctx.fillStyle = colors().label;
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(txt, x + cell/2, y + cell/2);
+      }
+    }
+  }
+}
+
+function draw() {
+  const C = colors();
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = 'transparent';
+  ctx.fillRect(0, 0, W, H);
+
+  const L = getLayout(K);
+  const { cellIn, cellOut, cellKern, gapIn, gapKern, gapOut,
+          sxIn, syIn, sxKern, syKern, sxOut, syOut,
+          OUT_T, OUT_H, OUT_W } = L;
+
+  const totalSteps = OUT_T * OUT_H * OUT_W;
+  const step = Math.floor(progress) % totalSteps;
+
+  const kt = Math.floor(step / (OUT_H * OUT_W));
+  const rem = step % (OUT_H * OUT_W);
+  const kh = Math.floor(rem / OUT_W);
+  const kw = rem % OUT_W;
+
+  document.getElementById('pos-lbl').textContent = `(t=${kt}, y=${kh}, x=${kw})`;
+  document.getElementById('out-lbl').textContent = `${step + 1} / ${totalSteps}`;
+  document.getElementById('rf-lbl').textContent =
+    K === 3 ? '3 frames × 3×3 spatial' : '1 frame × 1×1 spatial';
+
+  const SLICE_OFFSET_X = 18;
+  const SLICE_OFFSET_Y = 14;
+
+  for (let t = 0; t < IN_T; t++) {
+    const ox = t * SLICE_OFFSET_X;
+    const oy = t * SLICE_OFFSET_Y;
+
+    for (let r = 0; r < IN_H; r++) {
+      for (let c2 = 0; c2 < IN_W; c2++) {
+        const x = sxIn + ox + c2*(cellIn+gapIn);
+        const y = syIn + oy + r*(cellIn+gapIn);
+
+        const inKernel = (t >= kt && t < kt+K) &&
+                         (r >= kh && r < kh+K) &&
+                         (c2 >= kw && c2 < kw+K);
+
+        ctx.fillStyle   = inKernel ? C.highlight : C.cell;
+        ctx.strokeStyle = inKernel ? C.highlight : C.cellStr;
+        ctx.lineWidth   = inKernel ? 1.5 : 0.5;
+        ctx.beginPath();
+        ctx.roundRect(x, y, cellIn, cellIn, 3);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = inKernel ? C.hlText : C.label;
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${t},${r},${c2}`, x+cellIn/2, y+cellIn/2);
+      }
+    }
+  }
+
+  ctx.fillStyle = C.label;
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const midIn = sxIn + (IN_W/2)*(cellIn+gapIn) + SLICE_OFFSET_X*(IN_T-1)/2;
+  ctx.fillText(`input  (${IN_T}×${IN_H}×${IN_W})`, midIn, syIn + IN_H*(cellIn+gapIn) + SLICE_OFFSET_Y*(IN_T-1) + 6);
+
+  ctx.fillStyle = C.label;
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  for (let t = 0; t < IN_T; t++) {
+    const ox = t * SLICE_OFFSET_X;
+    const oy = t * SLICE_OFFSET_Y;
+    ctx.fillText(`t=${t}`, sxIn + ox - 2, syIn + oy - 7);
+  }
+
+  ctx.fillStyle = C.label;
+  ctx.font = '12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const arrowX1 = sxIn + IN_W*(cellIn+gapIn) + SLICE_OFFSET_X*(IN_T-1) + 4;
+  const arrowY = syIn + (IN_H/2)*(cellIn+gapIn) + SLICE_OFFSET_Y*(IN_T-1)/2;
+  ctx.fillText('⊛', arrowX1 + 6, arrowY);
+
+  for (let t = 0; t < K; t++) {
+    for (let r = 0; r < K; r++) {
+      for (let c2 = 0; c2 < K; c2++) {
+        const x = sxKern + t*5 + c2*(cellKern+gapKern);
+        const y = syKern + t*5 + r*(cellKern+gapKern);
+        ctx.fillStyle   = C.kern;
+        ctx.strokeStyle = C.kernStr;
+        ctx.lineWidth   = 0.5;
+        ctx.beginPath();
+        ctx.roundRect(x, y, cellKern, cellKern, 3);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#085041';
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`w`, x+cellKern/2, y+cellKern/2);
+      }
+    }
+  }
+
+  ctx.fillStyle = C.label;
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const midKernX = sxKern + (K/2)*(cellKern+gapKern) + (K-1)*2.5;
+  const botKern = syKern + K*(cellKern+gapKern) + (K-1)*5 + 6;
+  ctx.fillText(`kernel  (${K}×${K}×${K})`, midKernX, botKern);
+
+  const arrowX2 = sxKern + K*(cellKern+gapKern) + (K-1)*5 + 2;
+  ctx.fillStyle = C.label;
+  ctx.font = '12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('=', arrowX2 + 7, syKern + (K/2)*(cellKern+gapKern) + (K-1)*2.5);
+
+  for (let t = 0; t < OUT_T; t++) {
+    for (let r = 0; r < OUT_H; r++) {
+      for (let c2 = 0; c2 < OUT_W; c2++) {
+        const outStep = t*OUT_H*OUT_W + r*OUT_W + c2;
+        const x = sxOut + c2*(cellOut+gapOut) + t*12;
+        const y = syOut + r*(cellOut+gapOut) + t*10;
+
+        const isCurrent = (outStep === step);
+        const isDone    = (outStep < step);
+
+        ctx.fillStyle   = isCurrent ? C.out : isDone ? C.outFill : C.dim;
+        ctx.strokeStyle = isCurrent ? C.outStr : isDone ? C.outStr : C.dimStr;
+        ctx.lineWidth   = isCurrent ? 2 : 0.5;
+        ctx.beginPath();
+        ctx.roundRect(x, y, cellOut, cellOut, 3);
+        ctx.fill();
+        ctx.stroke();
+
+        if (isCurrent || isDone) {
+          ctx.fillStyle = isCurrent ? '#412402' : C.outStr;
+          ctx.font = `${isCurrent ? 10 : 9}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('Σ', x+cellOut/2, y+cellOut/2);
+        }
+      }
+    }
+  }
+
+  ctx.fillStyle = C.label;
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const midOutX = sxOut + (OUT_W/2)*(cellOut+gapOut) + (OUT_T-1)*6;
+  const botOut = syOut + OUT_H*(cellOut+gapOut) + (OUT_T-1)*10 + 6;
+  ctx.fillText(`output  (${OUT_T}×${OUT_H}×${OUT_W})`, midOutX, botOut);
+
+  if (OUT_T > 1) {
+    for (let t = 0; t < OUT_T; t++) {
+      const ox = t*12, oy = t*10;
+      ctx.fillStyle = C.label;
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`t=${t}`, sxOut + ox - 2, syOut + oy - 6);
+    }
+  }
+
+  ctx.fillStyle = C.label;
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+
+  const noteX = 10, noteY = H - 48;
+  ctx.fillText('highlighted (purple) = voxels covered by kernel this step', noteX, noteY);
+  ctx.fillStyle = C.out;
+  ctx.fillText('amber = current output voxel being computed', noteX, noteY + 16);
+  ctx.fillStyle = C.outFill;
+  ctx.fillText('light amber = already computed', noteX, noteY + 32);
+}
+
+function tick() {
+  if (playing) progress += 0.04 * speedMul;
+  draw();
+  raf = requestAnimationFrame(tick);
+}
+
+tick();
+
+document.getElementById('btn').addEventListener('click', () => {
+  playing = !playing;
+  document.getElementById('btn').textContent = playing ? 'Pause' : 'Play';
+});
+
+document.getElementById('spd').addEventListener('input', e => {
+  speedMul = +e.target.value;
+  document.getElementById('spd-lbl').textContent = speedMul + '×';
+});
+
+document.getElementById('ksel').addEventListener('change', e => {
+  K = +e.target.value;
+  progress = 0;
+  draw();
+});
+</script>
