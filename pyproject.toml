@@ -102,8 +102,9 @@ train-linear     = "train.train_classifier:main"
 infer-linear     = "inference.inference_classifier:main"
 train-deep       = "train.train_classifier:main"
 infer-deep       = "inference.inference_classifier:main"
-train-temporal    = "train.train_classifier:main"
-infer-temporal    = "inference.inference_classifier:main"
+train-temporal   = "train.train_classifier:main"
+infer-temporal   = "inference.inference_classifier:main"
+visualise-emb    = "inference.visualise_embeddings:main"
 
 [build-system]
 requires = ["hatchling"]

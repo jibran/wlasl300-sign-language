@@ -108,6 +108,9 @@ uv run pre-commit install
 # Using the Kaggle CLI (credentials in .env)
 uv run kaggle datasets download vodinhnhattruong/dataset-wlasl300 \
     --unzip --path data/raw/
+
+# Also download the original WLASL JSON annotation file
+# from https://github.com/dxli94/WLASL and place it at:
 ```
 
 ### Build annotations
@@ -116,8 +119,8 @@ This step verifies video files on disk, computes Word2Vec embeddings for all 300
 
 ```bash
 uv run python dataset/annotations/build_annotations.py \
-    --preprocessing_dir  preprocessing \
-    --folder2label       folder2label_str.txt \
+    --preprocessing_dir  dataset/raw/preprocessing \
+    --folder2label       dataset/raw/folder2label_str.txt \
     --word2vec_bin       trained_models/embeddings/GoogleNews-vectors-negative300.bin \
     --out_dir            dataset/annotations
 ```
@@ -472,7 +475,7 @@ Kaggle mirror of the WLASL dataset used for download and video distribution.
 https://www.kaggle.com/datasets/vodinhnhattruong/dataset-wlasl300
 
 [15] **WLASL GitHub repository** — Li, D. et al.
-Source of model design choices.
+Source of the official WLASL annotation data and dataset splits.
 https://github.com/dxli94/WLASL
 
 **Machine learning utilities**
