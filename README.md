@@ -33,11 +33,11 @@ Video clip (B, 3, 16, 256, 256)
  I3D backbone (Kinetics-400 pretrained)
         │  global avg pool
         ▼
-  Feature vector (B, 1024)
+  Feature vector (B, 2048)
         │
         ▼
   Projection head
-  Linear(1024→512) → BN → ReLU → Dropout
+  Linear(2048) → BN → ReLU → Dropout
   Linear(512→300)  → L2 normalise
         │
         ▼
@@ -324,6 +324,49 @@ are refreshed on screen.  A lower stride gives more frequent updates at the
 cost of higher CPU/GPU load.
 
 ---
+
+## Epoch Evaluation
+
+```bash
+
+# Val + test for all 60 epochs
+uv run eval-epochs \
+    --epochs_dir trained_models/classifier/epochs \
+    --model classifier
+
+# Val only (faster — about half the time)
+uv run eval-epochs \
+    --epochs_dir trained_models/classifier/epochs \
+    --model classifier \
+    --skip_test
+
+# Specific range (e.g. only phase 3 epochs 41–60)
+uv run eval-epochs \
+    --epochs_dir trained_models/classifier/epochs \
+    --model classifier \
+    --start_epoch 41 \
+    --end_epoch 60
+
+# Resume if interrupted mid-run
+uv run eval-epochs \
+    --epochs_dir trained_models/classifier/epochs \
+    --model classifier \
+    --resume
+
+```
+
+**What it produces in `logs/classifier/epoch_eval/`:**
+
+- `results.csv` — one row per epoch with `val_top1`, `val_top5`, `val_loss`, `test_top1`, `test_top5`, `test_loss`
+- `curves.html` — interactive Plotly chart with a vertical marker at the best val epoch
+- `best_val.json` — metadata for the best val checkpoint (epoch number + all metrics)
+
+**Console output** after each epoch looks like:
+```
+    10    12.34%     31.20%     4.6120  |  test top1=11.80%  test top-5=30.10%
+    11    13.10%     33.40%     4.5890  |  ...
+  → best at epoch 10
+```
 
 ## Experiment tracking
 
