@@ -1,0 +1,143 @@
+
+<style>
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 16px;}
+.stat{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 12px;}
+.stat.hi{background:var(--color-background-info);}
+.stat .lbl{font-size:11px;color:var(--color-text-secondary);margin:0 0 2px;}
+.stat.hi .lbl{color:var(--color-text-info);}
+.stat .val{font-size:17px;font-weight:500;margin:0;}
+.stat.hi .val{color:var(--color-text-info);}
+.stat .sub{font-size:10px;color:var(--color-text-tertiary);margin:2px 0 0;}
+.stat.hi .sub{color:var(--color-text-info);}
+.card{background:var(--color-background-secondary);border-radius:var(--border-radius-lg);padding:14px;margin:0 0 12px;}
+.leg{display:flex;gap:14px;margin:0 0 8px;font-size:11px;color:var(--color-text-secondary);flex-wrap:wrap;}
+.leg span{display:flex;align-items:center;gap:4px;}
+.sw{width:20px;height:3px;border-radius:2px;display:inline-block;}
+.sw-dash{width:20px;height:0;border-top:2px dashed;display:inline-block;vertical-align:middle;}
+</style>
+
+<div class="stat-row">
+  <div class="stat hi">
+    <p class="lbl">Best val top-1</p>
+    <p class="val">23.7%</p>
+    <p class="sub">epoch 56 · top-5: 52.5%</p>
+  </div>
+  <div class="stat hi">
+    <p class="lbl">Best test top-1</p>
+    <p class="val">26.3%</p>
+    <p class="sub">epoch 50 · top-5: 52.3%</p>
+  </div>
+  <div class="stat">
+    <p class="lbl">Train top-1 @ ep 60</p>
+    <p class="val">81.8%</p>
+    <p class="sub">gap vs val: 59pp overfit</p>
+  </div>
+  <div class="stat">
+    <p class="lbl">Phase 2 gain</p>
+    <p class="val">+8.9pp</p>
+    <p class="sub">val: 13.8% → 22.7% (ep20→40)</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="leg">
+    <span><b class="sw" style="background:#534AB7"></b>Val top-1</span>
+    <span><b class="sw" style="background:#1D9E75"></b>Test top-1</span>
+    <span><b class="sw-dash" style="border-color:#D85A30"></b>Train top-1</span>
+  </div>
+  <div style="position:relative;height:240px;"><canvas id="c1"></canvas></div>
+</div>
+
+<div class="card">
+  <div class="leg">
+    <span><b class="sw" style="background:#534AB7"></b>Val top-5</span>
+    <span><b class="sw" style="background:#1D9E75"></b>Test top-5</span>
+    <span><b class="sw-dash" style="border-color:#D85A30"></b>Train top-5</span>
+  </div>
+  <div style="position:relative;height:200px;"><canvas id="c2"></canvas></div>
+</div>
+
+<div class="card">
+  <div class="leg">
+    <span><b class="sw" style="background:#888780"></b>Val loss</span>
+    <span><b class="sw" style="background:#D85A30"></b>Train loss</span>
+  </div>
+  <div style="position:relative;height:180px;"><canvas id="c3"></canvas></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const PURPLE='#534AB7', TEAL='#1D9E75', CORAL='#D85A30', GRAY='#888780';
+const grid='rgba(128,128,128,0.1)';
+const labels=Array.from({length:60},(_,i)=>i+1);
+
+const train_t1=[2.8,7.8,12.0,16.7,19.1,22.2,25.8,28.5,30.5,29.9,26.5,25.7,29.0,30.9,33.1,33.6,37.8,41.3,42.1,44.4,31.6,39.5,44.3,47.1,47.7,49.2,49.6,52.5,51.5,50.8,54.9,56.7,63.4,63.5,65.7,67.3,71.3,71.1,76.0,75.0,76.3,78.6,78.5,78.8,78.3,80.2,79.1,79.7,79.5,81.2,80.8,80.3,79.3,81.4,80.9,81.1,81.0,81.5,80.8,81.8];
+const train_t5=[8.1,20.3,30.2,36.3,41.2,45.6,50.4,55.0,56.3,56.2,51.8,50.8,55.5,57.2,61.3,62.0,66.6,69.5,70.6,72.9,58.2,68.0,73.5,75.8,76.0,78.2,79.0,79.7,79.5,80.1,83.4,83.8,86.5,88.0,89.1,90.4,91.5,92.6,94.5,93.8,95.2,95.4,95.7,94.7,95.5,95.8,95.4,95.6,95.6,96.1,96.2,96.2,96.0,96.0,96.7,96.9,96.3,96.2,96.4,96.8];
+const train_loss=[5.9785,5.1717,4.7236,4.4565,4.2427,4.0406,3.8649,3.7382,3.6507,3.6792,3.8119,3.8627,3.6919,3.6134,3.4791,3.4582,3.2679,3.169,3.1095,3.0267,3.5725,3.2068,2.994,2.921,2.8982,2.8112,2.8085,2.7316,2.7503,2.7405,2.6256,2.5772,2.4141,2.3813,2.3041,2.2499,2.1589,2.1229,2.0183,2.0234,1.9766,1.9465,1.914,1.9359,1.942,1.8806,1.9019,1.8875,1.8945,1.874,1.8674,1.8606,1.8732,1.8619,1.8446,1.8422,1.8471,1.8438,1.8512,1.8237];
+
+const val_t1=[3.3,4.5,7.4,7.9,8.5,9.3,9.4,11.1,9.0,10.7,8.7,10.4,10.4,11.1,11.5,11.6,11.4,13.8,13.1,13.2,12.6,13.1,13.1,13.8,13.9,14.5,15.4,15.1,14.9,15.6,16.6,17.6,17.1,19.2,20.4,19.9,20.3,20.6,22.7,22.1,23.3,23.6,22.8,22.3,22.7,22.0,22.6,22.5,22.2,23.6,22.6,23.1,22.8,23.3,23.1,23.7,23.1,23.0,23.2,22.7];
+const test_t1=[2.8,5.8,5.4,7.6,8.3,8.9,10.6,10.4,11.2,10.6,9.0,10.0,10.5,11.7,11.1,12.7,13.1,12.6,12.4,12.0,13.1,15.5,16.5,16.9,17.9,17.4,17.9,18.0,18.9,19.3,18.8,19.6,20.5,21.6,22.2,22.5,23.2,23.5,24.5,25.0,25.1,24.6,24.9,25.3,24.5,25.1,25.2,24.5,25.2,26.3,25.6,25.6,25.7,25.7,25.1,25.3,25.0,26.1,25.4,25.7];
+const val_t5=[9.2,15.0,17.8,21.4,21.7,25.8,26.4,27.0,27.1,27.4,24.2,26.6,29.3,28.9,30.3,29.9,30.8,32.1,32.7,34.3,31.3,35.8,37.4,40.5,41.1,42.0,42.0,42.0,41.5,42.5,44.8,46.2,45.5,48.5,49.7,49.6,49.5,51.2,50.5,51.5,52.0,52.0,51.4,51.8,51.8,52.4,52.1,53.0,52.1,52.0,52.6,52.0,51.8,52.0,53.2,52.5,52.0,52.4,52.7,52.4];
+const test_t5=[9.2,16.4,17.3,23.0,22.4,25.0,27.6,27.3,29.0,28.5,25.1,27.4,27.7,30.2,29.5,30.0,31.0,31.4,33.4,34.3,33.1,36.9,38.1,40.6,40.3,41.6,42.2,42.8,42.8,43.3,44.7,45.8,46.8,47.7,47.7,49.3,50.3,52.0,51.2,51.7,51.2,51.6,52.9,50.9,51.3,51.9,52.0,51.1,52.8,52.3,51.9,52.9,51.5,52.8,53.0,52.1,52.1,52.0,51.9,53.3];
+const val_loss=[5.604,5.285,5.101,4.989,4.885,4.814,4.761,4.711,4.725,4.708,4.836,4.780,4.722,4.740,4.683,4.721,4.668,4.678,4.600,4.573,4.795,4.651,4.520,4.520,4.456,4.400,4.441,4.361,4.409,4.351,4.308,4.285,4.234,4.177,4.118,4.135,4.111,4.033,4.040,4.019,4.045,4.008,4.031,4.037,4.029,3.985,3.996,4.014,3.990,3.994,4.002,3.979,3.983,3.983,3.990,3.975,4.035,3.961,4.001,3.998];
+
+const phaseAnnotations = {
+  annotation: {
+    annotations: {
+      p2: {type:'line',xMin:20.5,xMax:20.5,borderColor:'rgba(128,128,128,0.4)',borderWidth:1.5,borderDash:[5,3],
+           label:{display:true,content:'phase 2',position:'start',font:{size:9},color:'#888',yAdjust:-4}},
+      p3: {type:'line',xMin:40.5,xMax:40.5,borderColor:'rgba(128,128,128,0.4)',borderWidth:1.5,borderDash:[5,3],
+           label:{display:true,content:'phase 3',position:'start',font:{size:9},color:'#888',yAdjust:-4}},
+      bv: {type:'line',xMin:55.5,xMax:55.5,borderColor:PURPLE+'88',borderWidth:1,borderDash:[3,3],
+           label:{display:true,content:'best val ep56',position:'end',font:{size:9},color:PURPLE,yAdjust:4}},
+    }
+  }
+};
+
+const baseOpts=(yLabel,max,annotations)=>({
+  responsive:true,maintainAspectRatio:false,animation:false,
+  plugins:{legend:{display:false},...(annotations||phaseAnnotations)},
+  scales:{
+    x:{grid:{color:grid},ticks:{font:{size:9},color:'#888',maxTicksLimit:15}},
+    y:{grid:{color:grid},title:{display:true,text:yLabel,font:{size:9},color:'#888'},
+       ticks:{font:{size:9},color:'#888'},min:0,...(max?{max}:{})}
+  }
+});
+
+new Chart(document.getElementById('c1'),{
+  type:'line',
+  data:{labels,datasets:[
+    {data:val_t1, borderColor:PURPLE,borderWidth:2.5,pointRadius:0,tension:0.3},
+    {data:test_t1,borderColor:TEAL,  borderWidth:2,  pointRadius:0,tension:0.3},
+    {data:train_t1,borderColor:CORAL,borderWidth:1.5,borderDash:[5,3],pointRadius:0,tension:0.3},
+  ]},
+  options:{...baseOpts('accuracy (%)',90),plugins:{legend:{display:false},...phaseAnnotations,
+    title:{display:true,text:'Top-1 accuracy — all 60 epochs + 3 phases',font:{size:11}}}}
+});
+
+new Chart(document.getElementById('c2'),{
+  type:'line',
+  data:{labels,datasets:[
+    {data:val_t5, borderColor:PURPLE,borderWidth:2,  pointRadius:0,tension:0.3},
+    {data:test_t5,borderColor:TEAL,  borderWidth:2,  pointRadius:0,tension:0.3},
+    {data:train_t5,borderColor:CORAL,borderWidth:1.5,borderDash:[5,3],pointRadius:0,tension:0.3},
+  ]},
+  options:{...baseOpts('top-5 (%)'),plugins:{legend:{display:false},...phaseAnnotations,
+    title:{display:true,text:'Top-5 accuracy — all 60 epochs',font:{size:11}}}}
+});
+
+new Chart(document.getElementById('c3'),{
+  type:'line',
+  data:{labels,datasets:[
+    {data:val_loss,  borderColor:GRAY, borderWidth:2,  pointRadius:0,tension:0.3},
+    {data:train_loss,borderColor:CORAL,borderWidth:1.5,borderDash:[5,3],pointRadius:0,tension:0.3},
+  ]},
+  options:{...baseOpts('loss',null,{annotation:{annotations:{
+    p2:{type:'line',xMin:20.5,xMax:20.5,borderColor:'rgba(128,128,128,0.35)',borderWidth:1,borderDash:[5,3]},
+    p3:{type:'line',xMin:40.5,xMax:40.5,borderColor:'rgba(128,128,128,0.35)',borderWidth:1,borderDash:[5,3]},
+  }}}),plugins:{legend:{display:false},annotation:{annotations:{
+    p2:{type:'line',xMin:20.5,xMax:20.5,borderColor:'rgba(128,128,128,0.35)',borderWidth:1,borderDash:[5,3]},
+    p3:{type:'line',xMin:40.5,xMax:40.5,borderColor:'rgba(128,128,128,0.35)',borderWidth:1,borderDash:[5,3]},
+  }},title:{display:true,text:'Loss — train diverges from val as overfitting grows',font:{size:11}}}}
+});
+</script>

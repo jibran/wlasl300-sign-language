@@ -24,13 +24,13 @@
   <!-- I3D Backbone -->
   <rect x="120" y="208" width="440" height="64" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
   <text x="340" y="230" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C" dominant-baseline="central">I3D backbone  (i3d_r50 · Kinetics-400 pretrained)</text>
-  <text x="340" y="252" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">3D ResNet · global avg pool → (B, 1024)  ·  phase 1 frozen / phase 2–3 fine-tuned</text>
+  <text x="340" y="252" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">3D ResNet · global avg pool → (B, 2048)  ·  phase 1 frozen / phase 2–3 fine-tuned</text>
   <line x1="340" y1="272" x2="340" y2="298" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <!-- Projection Head -->
   <rect x="160" y="300" width="360" height="64" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
   <text x="340" y="320" text-anchor="middle" font-size="14" font-weight="500" fill="#26215C" dominant-baseline="central">Projection head</text>
-  <text x="340" y="342" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">Linear 1024→512 · BN · ReLU · Dropout · Linear 512→300 · L2-norm</text>
+  <text x="340" y="342" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">Linear 2048→512 · BN · ReLU · Dropout · Linear 512→300 · L2-norm</text>
   <line x1="340" y1="364" x2="340" y2="390" stroke="#888780" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <!-- Fork to predicted + target -->
