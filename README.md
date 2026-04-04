@@ -51,7 +51,7 @@ Video clip (B, 3, 16, 256, 256)
 
 ![Sign Model](./images/sign_model_layers.svg)
 
-![Projection Head](./images/projection_head_layers.svg)
+![Projection Head](./images/classifier_projection_head_layers.svg)
 
 ![I3D Backbone](./images/i3d_backbone_layers.svg)
 

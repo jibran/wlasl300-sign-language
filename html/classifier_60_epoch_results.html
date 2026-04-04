@@ -9,6 +9,7 @@
 .stat.hi .val{color:var(--color-text-info);}
 .stat .sub{font-size:10px;color:var(--color-text-tertiary);margin:2px 0 0;}
 .stat.hi .sub{color:var(--color-text-info);}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px; margin: 0 0 20px;}
 .card{background:var(--color-background-secondary);border-radius:var(--border-radius-lg);padding:14px;margin:0 0 12px;}
 .leg{display:flex;gap:14px;margin:0 0 8px;font-size:11px;color:var(--color-text-secondary);flex-wrap:wrap;}
 .leg span{display:flex;align-items:center;gap:4px;}
@@ -38,23 +39,24 @@
     <p class="sub">val: 13.8% → 22.7% (ep20→40)</p>
   </div>
 </div>
-
-<div class="card">
-  <div class="leg">
-    <span><b class="sw" style="background:#534AB7"></b>Val top-1</span>
-    <span><b class="sw" style="background:#1D9E75"></b>Test top-1</span>
-    <span><b class="sw-dash" style="border-color:#D85A30"></b>Train top-1</span>
+<div class="grid-2">
+  <div class="card">
+    <div class="leg">
+      <span><b class="sw" style="background:#534AB7"></b>Val top-1</span>
+      <span><b class="sw" style="background:#1D9E75"></b>Test top-1</span>
+      <span><b class="sw-dash" style="border-color:#D85A30"></b>Train top-1</span>
+    </div>
+    <div style="position:relative;height:240px;"><canvas id="c1"></canvas></div>
   </div>
-  <div style="position:relative;height:240px;"><canvas id="c1"></canvas></div>
-</div>
 
-<div class="card">
-  <div class="leg">
-    <span><b class="sw" style="background:#534AB7"></b>Val top-5</span>
-    <span><b class="sw" style="background:#1D9E75"></b>Test top-5</span>
-    <span><b class="sw-dash" style="border-color:#D85A30"></b>Train top-5</span>
+  <div class="card">
+    <div class="leg">
+      <span><b class="sw" style="background:#534AB7"></b>Val top-5</span>
+      <span><b class="sw" style="background:#1D9E75"></b>Test top-5</span>
+      <span><b class="sw-dash" style="border-color:#D85A30"></b>Train top-5</span>
+    </div>
+    <div style="position:relative;height:200px;"><canvas id="c2"></canvas></div>
   </div>
-  <div style="position:relative;height:200px;"><canvas id="c2"></canvas></div>
 </div>
 
 <div class="card">

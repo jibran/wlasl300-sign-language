@@ -133,7 +133,7 @@ def plot_loss_curves(
         )
 
     ax.set_xlabel("Epoch")
-    ax.set_ylabel("Loss (cosine embedding)")
+    ax.set_ylabel("Loss")
     ax.set_title("Training and validation loss")
     ax.legend()
 

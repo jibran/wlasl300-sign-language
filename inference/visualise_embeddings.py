@@ -110,24 +110,29 @@ def extract_features(
 
         # Always use backbone.forward() — never the neck or head.
         # This gives a (B, D) flat feature vector regardless of model type.
-        feats = model.backbone(videos)           # (B, 2048)
+        feats = model.backbone(videos)  # (B, 2048)
 
         all_features.append(feats.cpu().float().numpy())
         all_labels.append(label_idx.numpy().astype(np.int32))
 
         if (batch_idx + 1) % 20 == 0:
             done = (batch_idx + 1) * loader.batch_size
-            log.info("  %d / %d clips  (%.0f clips/s)",
-                     min(done, total), total,
-                     min(done, total) / max(time.perf_counter() - t0, 1e-6))
+            log.info(
+                "  %d / %d clips  (%.0f clips/s)",
+                min(done, total),
+                total,
+                min(done, total) / max(time.perf_counter() - t0, 1e-6),
+            )
 
     features = np.concatenate(all_features, axis=0)
-    labels   = np.concatenate(all_labels,   axis=0)
-    elapsed  = time.perf_counter() - t0
+    labels = np.concatenate(all_labels, axis=0)
+    elapsed = time.perf_counter() - t0
 
     log.info(
         "Extraction complete — %d clips  shape=%s  time=%.1fs",
-        len(features), features.shape, elapsed,
+        len(features),
+        features.shape,
+        elapsed,
     )
     return features, labels, []
 
@@ -167,7 +172,9 @@ def reduce_umap(
 
     log.info(
         "Running UMAP  n_neighbors=%d  min_dist=%.2f  n_samples=%d …",
-        n_neighbors, min_dist, len(features),
+        n_neighbors,
+        min_dist,
+        len(features),
     )
     t0 = time.perf_counter()
     reducer = umap.UMAP(
@@ -216,12 +223,15 @@ def reduce_tsne(
         explained = pca.explained_variance_ratio_.sum() * 100
         log.info(
             "PCA done in %.1fs  (%.1f%% variance retained)",
-            time.perf_counter() - t0, explained,
+            time.perf_counter() - t0,
+            explained,
         )
 
     log.info(
         "Running t-SNE  perplexity=%.0f  n_iter=%d  n_samples=%d …",
-        perplexity, n_iter, len(features),
+        perplexity,
+        n_iter,
+        len(features),
     )
     t0 = time.perf_counter()
     tsne = TSNE(
@@ -244,6 +254,7 @@ def reduce_tsne(
 def _class_colours(n: int) -> list[str]:
     """Generate ``n`` perceptually distinct hex colours using HSL cycling."""
     import colorsys
+
     colours = []
     for i in range(n):
         hue = i / n
@@ -291,22 +302,24 @@ def save_plotly_html(
     for lbl in unique_labels:
         mask = labels == lbl
         name = vocab[lbl] if lbl < len(vocab) else str(lbl)
-        traces.append(go.Scatter(
-            x=embedding[mask, 0],
-            y=embedding[mask, 1],
-            mode="markers",
-            marker=dict(size=5, color=label_to_colour[lbl], opacity=0.75),
-            name=name,
-            text=[name] * mask.sum(),
-            hovertemplate="<b>%{text}</b><br>x=%{x:.2f}  y=%{y:.2f}<extra></extra>",
-        ))
+        traces.append(
+            go.Scatter(
+                x=embedding[mask, 0],
+                y=embedding[mask, 1],
+                mode="markers",
+                marker=dict(size=5, color=label_to_colour[lbl], opacity=0.75),
+                name=name,
+                text=[name] * mask.sum(),
+                hovertemplate="<b>%{text}</b><br>x=%{x:.2f}  y=%{y:.2f}<extra></extra>",
+            )
+        )
 
     method_upper = method.upper()
     fig = go.Figure(traces)
     fig.update_layout(
         title=dict(
             text=f"{model_type} backbone — {method_upper} of {split} features "
-                 f"({n_classes_shown} classes)",
+            f"({n_classes_shown} classes)",
             font=dict(size=14),
         ),
         xaxis_title=f"{method_upper} dim 1",
@@ -348,8 +361,8 @@ def save_matplotlib_png(
         model_type: Model type string for the title.
         n_classes_shown: Number of classes in the plot.
     """
-    import matplotlib.pyplot as plt
     import matplotlib.cm as cm
+    import matplotlib.pyplot as plt
 
     unique_labels = np.unique(labels)
     cmap = cm.get_cmap("tab20", len(unique_labels))
@@ -530,17 +543,13 @@ def main() -> None:
         raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
 
     log.info("Loading checkpoint: %s", ckpt_path)
-    model, epoch, metrics = ModelClass.load_checkpoint(
-        str(ckpt_path), cfg, device=device_str
-    )
+    model, epoch, metrics = ModelClass.load_checkpoint(str(ckpt_path), cfg, device=device_str)
     model.eval()
     model.to(device)
     log.info("Checkpoint loaded — epoch=%d  val_top1=%.4f", epoch, metrics.get("top1", 0))
 
     # ── Load vocab ────────────────────────────────────────────────────────────
-    vocab: list[str] = json.loads(
-        Path(cfg.paths.vocab_file).read_text(encoding="utf-8")
-    )
+    vocab: list[str] = json.loads(Path(cfg.paths.vocab_file).read_text(encoding="utf-8"))
 
     # ── Build dataset and loader ──────────────────────────────────────────────
     dataset = WLASL300Dataset(
@@ -568,20 +577,21 @@ def main() -> None:
     n_classes_shown = len(np.unique(labels))
     if args.n_classes > 0 and args.n_classes < n_classes_shown:
         from collections import Counter
+
         counts = Counter(labels.tolist())
         top_classes = {cls for cls, _ in counts.most_common(args.n_classes)}
-        mask = np.array([l in top_classes for l in labels])
+        mask = np.array([label in top_classes for label in labels])
         features = features[mask]
-        labels   = labels[mask]
+        labels = labels[mask]
         n_classes_shown = args.n_classes
         log.info(
             "Filtered to top %d classes — %d clips remaining",
-            n_classes_shown, len(features),
+            n_classes_shown,
+            len(features),
         )
 
     # ── Output directory ──────────────────────────────────────────────────────
-    out_dir = Path(args.out_dir) if args.out_dir else \
-        Path(f"logs/{args.model}/embeddings")
+    out_dir = Path(args.out_dir) if args.out_dir else Path(f"logs/{args.model}/embeddings")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Save raw features ─────────────────────────────────────────────────────
@@ -610,16 +620,26 @@ def main() -> None:
 
         if not args.no_html:
             save_plotly_html(
-                embedding, labels, vocab,
+                embedding,
+                labels,
+                vocab,
                 out_dir / f"{stem}.html",
-                method, args.split, args.model, n_classes_shown,
+                method,
+                args.split,
+                args.model,
+                n_classes_shown,
             )
 
         if not args.no_png:
             save_matplotlib_png(
-                embedding, labels, vocab,
+                embedding,
+                labels,
+                vocab,
                 out_dir / f"{stem}.png",
-                method, args.split, args.model, n_classes_shown,
+                method,
+                args.split,
+                args.model,
+                n_classes_shown,
             )
 
         emb_path = out_dir / f"{stem}_coords.npy"
